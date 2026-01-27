@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Supabase Cloud Domain -->
+        <domain includeSubdomains="true">supabase.co</domain>
+        <!-- Supabase API Domain -->
+        <domain includeSubdomains="true">supabase.com</domain>
+        <!-- Google API Domains (for Sign-In/Maps) -->
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

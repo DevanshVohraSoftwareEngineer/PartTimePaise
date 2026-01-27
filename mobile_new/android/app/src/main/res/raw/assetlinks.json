@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.parttimepaise.mobile_new",
+      "sha256_cert_fingerprints": [
+        "68:33:3E:A4:17:84:D4:A1:41:DA:C7:C9:36:DF:2E:4B:64:48:78:A4:A3:05:4E:34:25:C1:BF:55:D7:F7:EE:87"
+      ]
+    }
+  }
+]

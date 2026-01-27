@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own user documents
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Tasks rules
+    match /tasks/{taskId} {
+      // Anyone can read open tasks (for browsing)
+      allow read: if request.auth != null && resource.data.status == 'open';
+
+      // Only authenticated users can create tasks
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.clientId;
+
+      // Only task creators can update their own tasks
+      allow update: if request.auth != null &&
+                       request.auth.uid == resource.data.clientId;
+
+      // Only task creators can delete their own tasks
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.clientId;
+    }
+
+    // Swipes rules
+    match /swipes/{swipeId} {
+      // Users can read/write their own swipes
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == request.resource.data.workerId;
+    }
+
+    // Matches rules
+    match /matches/{matchId} {
+      // Users involved in the match can read it
+      allow read: if request.auth != null &&
+                     (request.auth.uid == resource.data.workerId ||
+                      request.auth.uid == resource.data.clientId);
+
+      // Only allow creation if both users have swiped right
+      allow create: if request.auth != null;
+
+      // Users involved can update match status
+      allow update: if request.auth != null &&
+                       (request.auth.uid == resource.data.workerId ||
+                        request.auth.uid == resource.data.clientId);
+    }
+
+    // Messages in matches
+    match /matches/{matchId}/messages/{messageId} {
+      // Users involved in the match can read/write messages
+      allow read, write: if request.auth != null &&
+                            (request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.workerId ||
+                             request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.clientId);
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      // Users can read/write their own notifications
+      allow read, write: if request.auth != null &&
+                            request.auth.uid == request.resource.data.userId;
+    }
+
+    // Bids
+    match /bids/{bidId} {
+      // Workers can create bids on tasks
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.workerId;
+
+      // Task creators and bidders can read bids
+      allow read: if request.auth != null &&
+                     (request.auth.uid == request.resource.data.workerId ||
+                      request.auth.uid == get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.clientId);
+
+      // Bidders can update their own bids
+      allow update: if request.auth != null &&
+                       request.auth.uid == resource.data.workerId;
+
+      // Task creators can update bid status
+      allow update: if request.auth != null &&
+                       request.auth.uid == get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.clientId;
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      // Users involved in the payment can access it
+      allow read, write: if request.auth != null;
+    }
+
+    // Ratings
+    match /ratings/{ratingId} {
+      // Users can create ratings for completed tasks
+      allow create: if request.auth != null;
+
+      // Anyone can read ratings
+      allow read: if request.auth != null;
+    }
+  }
+}

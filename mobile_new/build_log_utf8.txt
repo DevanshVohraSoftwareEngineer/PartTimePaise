@@ -1,0 +1,157 @@
+﻿
+flutter : Support 
+for Android x86 
+targets will be 
+removed in the next 
+stable release 
+after 3.27. See http
+s://github.com/flutt
+er/flutter/issues/15
+7543 for details.
+At line:1 char:1
++ flutter build apk 
+--debug > 
+build_log.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (Supp   
+ ort for And...4    
+3 for details.:    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+Running Gradle task 'assembleDebug'...                          
+lib/services/kyc_ser
+vice.dart:4:8: 
+Error: Error when 
+reading 'lib/firebas
+e_options.dart': 
+The system cannot 
+find the file 
+specified.
+
+import '../firebase_
+options.dart';
+       ^
+lib/screens/payment/
+payment_demand_dialo
+g.dart:63:9: Error: 
+No named parameter 
+with the name 
+'requestedAmount'.
+        
+requestedAmount: 
+amount,
+        
+^^^^^^^^^^^^^^^
+lib/screens/kaam/pos
+ted_tasks_screen.dar
+t:295:40: Error: 
+The getter 'supabase
+ServiceProvider' 
+isn't defined for 
+the class '_PostedTa
+sksScreenState'.
+ - '_PostedTasksScre
+enState' is from 'pa
+ckage:parttimepaise/
+screens/kaam/posted_
+tasks_screen.dart' (
+'lib/screens/kaam/po
+sted_tasks_screen.da
+rt').
+Try correcting the 
+name to the name of 
+an existing getter, 
+or defining a 
+getter or field 
+named 'supabaseServi
+ceProvider'.
+      final 
+supabaseService = re
+f.read(supabaseServi
+ceProvider);
+                    
+                   ^
+^^^^^^^^^^^^^^^^^^^^
+^^
+lib/screens/swipe/sw
+ipe_feed_screen.dart
+:43:40: Error: The 
+getter 'supabaseServ
+iceProvider' isn't 
+defined for the 
+class '_SwipeFeedScr
+eenState'.
+ - '_SwipeFeedScreen
+State' is from 'pack
+age:parttimepaise/sc
+reens/swipe/swipe_fe
+ed_screen.dart' ('li
+b/screens/swipe/swip
+e_feed_screen.dart')
+.
+Try correcting the 
+name to the name of 
+an existing getter, 
+or defining a 
+getter or field 
+named 'supabaseServi
+ceProvider'.
+      final 
+supabaseService = re
+f.read(supabaseServi
+ceProvider);
+                    
+                   ^
+^^^^^^^^^^^^^^^^^^^^
+^^
+Target kernel_snapsh
+ot_program failed: 
+Exception
+
+
+FAILURE: Build 
+failed with an 
+exception.
+
+* What went wrong:
+Execution failed 
+for task ':app:compi
+leFlutterBuildDebug'
+.
+> Process 'command '
+C:\Users\vohra\OneDr
+ive\flutter\bin\flut
+ter.bat'' finished 
+with non-zero exit 
+value 1
+
+* Try:
+> Run with 
+--stacktrace option 
+to get the stack 
+trace.
+> Run with --info 
+or --debug option 
+to get more log 
+output.
+> Run with --scan 
+to get full 
+insights.
+> Get more help at h
+ttps://help.gradle.o
+rg.
+
+BUILD FAILED in 18s
+Running Gradle task 'assembleDebug'...                             19.0s
+Gradle task 
+assembleDebug 
+failed with exit 
+code 1

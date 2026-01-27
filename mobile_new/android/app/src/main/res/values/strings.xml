@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PartTimePaise</string>
+    <string name="facebook_app_id">your-facebook-app-id</string>
+    <string name="facebook_client_token">your-facebook-client-token</string>
+    <string name="fb_login_protocol_scheme">fb-your-facebook-app-id</string>
+
+    <!-- Razorpay Configuration -->
+    <string name="rzp_package_name">com.parttimepaise.mobile_new</string>
+    <string name="rzp_scheme">parttimepaise</string>
+</resources>

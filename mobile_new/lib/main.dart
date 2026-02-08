@@ -102,7 +102,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp.router(
-      title: 'PartTimePaise',
+      title: 'UniHitch',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,

@@ -1,5 +1,5 @@
-name: parttimepaise
-description: Student task marketplace with Tinder-style swipe interface
+name: UniHitch
+description: Student task marketplace for campus micro-gigs.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -79,19 +79,19 @@ dependency_overrides:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/icon/app_face.jpeg"
   min_sdk_android: 21
   remove_alpha_ios: true
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/icon2.png
+  image: assets/images/hola.jpeg
   fullscreen: true
   android_gravity: center
   ios_content_mode: scaleAspectFit
   android_12:
     color: "#FFFFFF"
-    image: assets/images/icon2.png
+    image: assets/images/hola.jpeg
     icon_background_color: "#FFFFFF"
 
 flutter:

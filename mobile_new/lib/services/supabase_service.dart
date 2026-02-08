@@ -140,7 +140,7 @@ class SupabaseService {
     print('🔑 Supabase: resetPasswordForEmail for $email');
     await _withRetry(() => _supabase.auth.resetPasswordForEmail(
       email,
-      redirectTo: kIsWeb ? null : 'parttimepaise://reset-password',
+      redirectTo: kIsWeb ? null : 'parttimepaise://reset-password', // Keep scheme as is for now unless asked to change
     ));
   }
 

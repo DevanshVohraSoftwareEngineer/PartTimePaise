@@ -160,7 +160,7 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen>
                         colors: [Colors.white, Color(0xFFE6F1FF)],
                       ).createShader(bounds),
                       child: const Text(
-                        'PartTimePaise',
+                        'UniHitch',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,

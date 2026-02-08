@@ -306,11 +306,13 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
         }
       });
     } else if (mounted) {
+       final error = ref.read(matchesProvider).error ?? 'Unknown error';
        ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not accept match. Please try again or check connection.'),
+        SnackBar(
+          content: Text('Could not accept match: $error'),
           backgroundColor: AppTheme.nopeRed,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ),
       );
     }

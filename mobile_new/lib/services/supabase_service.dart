@@ -559,7 +559,22 @@ class SupabaseService {
     final clientId = currentUserId;
     if (clientId == null) throw Exception('Not logged in');
 
-    // 1. Create the Match
+    // 1. Try Secure RPC (idempotent & secure)
+    try {
+      final res = await _supabase.rpc('create_match_secure', params: {
+        'p_task_id': taskId,
+        'p_worker_id': workerId,
+      });
+      return res as String;
+    } catch (e) {
+      // Only fallback if function doesn't exist
+      if (!e.toString().contains('function') && !e.toString().contains('not found')) {
+        rethrow;
+      }
+      print('⚠️ Secure RPC not found, falling back to client-side insert...');
+    }
+
+    // 2. Legacy Fallback (Client-side insert)
     final matchRes = await _supabase.from('matches').insert({
       'task_id': taskId,
       'client_id': clientId,
@@ -570,7 +585,7 @@ class SupabaseService {
 
     final String matchId = matchRes['id'];
 
-    // 2. Create initial "Match" system message or notification
+    // 3. Send system message (RPC handles this if used)
     await sendMessage(matchId, "You matched! Start the conversation.", type: 'system');
     
     return matchId;

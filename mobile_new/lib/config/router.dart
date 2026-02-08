@@ -22,6 +22,15 @@ import '../screens/kaam/posted_tasks_screen.dart';
 import '../screens/kaam/task_feed_screen.dart';
 import '../screens/kaam/task_details_screen.dart';
 import '../parts/animated_splash_screen.dart';
+import '../screens/worker/asap_mode_screen.dart';
+import '../screens/legal/about_us_screen.dart';
+import '../screens/legal/contact_us_screen.dart';
+import '../screens/legal/privacy_policy_screen.dart';
+import '../screens/legal/terms_conditions_screen.dart';
+import '../screens/legal/cancellation_refund_screen.dart';
+import '../screens/task_completion_screen.dart';
+import '../screens/milan/call_screen.dart';
+import '../parts/bottom_nav_shell.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 

@@ -69,7 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Classic Apple-style Logo Vibe
                 const Center(
                   child: Text(
-                    'P',
+                    'U',
                     style: TextStyle(
                       fontSize: 64,
                       fontWeight: FontWeight.w900,
@@ -83,7 +83,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 
                 const Center(
                   child: Text(
-                    'PartTimePaise',
+                    'UniHitch',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,

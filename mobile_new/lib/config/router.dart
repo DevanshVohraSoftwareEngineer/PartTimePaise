@@ -22,30 +22,8 @@ import '../screens/kaam/posted_tasks_screen.dart';
 import '../screens/kaam/task_feed_screen.dart';
 import '../screens/kaam/task_details_screen.dart';
 import '../parts/animated_splash_screen.dart';
-import '../screens/worker/asap_mode_screen.dart';
-import '../screens/legal/about_us_screen.dart';
-import '../screens/legal/contact_us_screen.dart';
-import '../screens/legal/privacy_policy_screen.dart';
-import '../screens/legal/terms_conditions_screen.dart';
-import '../screens/legal/cancellation_refund_screen.dart';
-import '../screens/task_completion_screen.dart';
-import '../screens/milan/call_screen.dart';
-import '../parts/bottom_nav_shell.dart';
 
-final rootNavigatorKey = GlobalKey<NavigatorState>();
-
-class GoRouterRefreshStream extends ChangeNotifier {
-  late final StreamSubscription<dynamic> _subscription;
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners();
-    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
-  }
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-}
+// ... other imports ...
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -60,12 +38,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (path == '/splash') return null;
       if (authState.isLoading && authState.user == null) return null;
 
-      // Handle Password Recovery Redirection
-      if (authState.isPasswordRecovery && path != '/reset-password') {
-        return '/reset-password';
-      }
-
-      final isLoginRoute = path == '/login' || path == '/signup' || path == '/forgot-password' || path == '/verification' || path == '/reset-password';
+      // ... rest of logic ...
       
       if (!isAuthenticated && !isLoginRoute) {
         return '/login';

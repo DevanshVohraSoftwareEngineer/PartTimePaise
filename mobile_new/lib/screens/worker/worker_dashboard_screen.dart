@@ -7,7 +7,7 @@ import '../../managers/bids_provider.dart';
 import '../../managers/auth_provider.dart';
 
 class WorkerDashboardScreen extends ConsumerStatefulWidget {
-  const WorkerDashboardScreen({Key? key}) : super(key: key);
+  const WorkerDashboardScreen({super.key});
 
   @override
   ConsumerState<WorkerDashboardScreen> createState() => _WorkerDashboardScreenState();
@@ -55,7 +55,7 @@ class _WorkerDashboardScreenState extends ConsumerState<WorkerDashboardScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [AppTheme.navyMedium, AppTheme.navyLight],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -148,7 +148,7 @@ class _WorkerDashboardScreenState extends ConsumerState<WorkerDashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.currency_rupee, color: AppTheme.boostGold, size: 28),
+                          const Icon(Icons.currency_rupee, color: AppTheme.boostGold, size: 28),
                           const SizedBox(width: 8),
                           Text(
                             'Estimated Earnings',
@@ -199,7 +199,7 @@ class _WorkerDashboardScreenState extends ConsumerState<WorkerDashboardScreen> {
                     alignment: Alignment.center,
                     child: Column(
                       children: [
-                        Icon(Icons.work_outline, size: 48, color: AppTheme.grey400),
+                        const Icon(Icons.work_outline, size: 48, color: AppTheme.grey400),
                         const SizedBox(height: 16),
                         Text(
                           'No bids yet',

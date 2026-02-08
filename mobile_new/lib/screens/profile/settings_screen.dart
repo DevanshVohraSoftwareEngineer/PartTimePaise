@@ -4,14 +4,15 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../managers/auth_provider.dart';
 import '../../managers/theme_provider.dart';
-import '../../services/gig_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? Colors.white : Colors.black;
 
     return Scaffold(
       appBar: AppBar(
@@ -20,9 +21,9 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: [
           // Account Section
-          _buildSectionHeader('Account'),
+          _buildSectionHeader('Account', primaryColor),
           ListTile(
-            leading: const Icon(Icons.person),
+            leading: Icon(Icons.person_rounded, color: primaryColor),
             title: const Text('Profile Information'),
             subtitle: Text(currentUser?.email ?? 'Not available'),
             onTap: () {
@@ -30,14 +31,14 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.location_on),
+            leading: Icon(Icons.location_on_rounded, color: primaryColor),
             title: const Text('Distance Preferences'),
             onTap: () {
               context.push('/profile/distance-preferences');
             },
           ),
           ListTile(
-            leading: const Icon(Icons.verified_user),
+            leading: Icon(Icons.verified_user_rounded, color: primaryColor),
             title: const Text('KYC Verification'),
             onTap: () {
               context.push('/kyc-verification');
@@ -47,9 +48,9 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
 
           // Notifications Section
-          _buildSectionHeader('Notifications'),
+          _buildSectionHeader('Notifications', primaryColor),
           SwitchListTile(
-            secondary: const Icon(Icons.notifications),
+            secondary: Icon(Icons.notifications_rounded, color: primaryColor),
             title: const Text('Push Notifications'),
             subtitle: const Text('Receive notifications for matches and messages'),
             value: true, // TODO: Connect to actual setting
@@ -58,7 +59,7 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           SwitchListTile(
-            secondary: const Icon(Icons.task),
+            secondary: Icon(Icons.task_rounded, color: primaryColor),
             title: const Text('Task Updates'),
             subtitle: const Text('Get notified about task status changes'),
             value: true, // TODO: Connect to actual setting
@@ -70,9 +71,9 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
 
           // Privacy Section
-          _buildSectionHeader('Privacy'),
+          _buildSectionHeader('Privacy', primaryColor),
           ListTile(
-            leading: const Icon(Icons.visibility_off),
+            leading: Icon(Icons.visibility_off_rounded, color: primaryColor),
             title: const Text('Privacy Settings'),
             subtitle: const Text('Control who can see your profile'),
             onTap: () {
@@ -80,7 +81,7 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.block),
+            leading: Icon(Icons.block_rounded, color: primaryColor),
             title: const Text('Blocked Users'),
             subtitle: const Text('Manage blocked users'),
             onTap: () {
@@ -91,23 +92,9 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
 
           // Appearance Section
-          _buildSectionHeader('Status & Appearance'),
+          _buildSectionHeader('Appearance', primaryColor),
           SwitchListTile(
-            secondary: const Icon(Icons.bolt, color: Colors.green),
-            title: const Text('Online Status (ASAP Mode)'),
-            subtitle: const Text('Appear on the radar and receive urgent gig alarms'),
-            value: currentUser?.isOnline ?? false,
-            onChanged: (val) {
-              final gigService = ref.read(gigServiceProvider);
-              if (val) {
-                gigService.goOnline(context);
-              } else {
-                gigService.goOffline();
-              }
-            },
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.dark_mode),
+            secondary: Icon(Icons.dark_mode_rounded, color: primaryColor),
             title: const Text('Dark Mode'),
             subtitle: const Text('Use a dark and light grey color scheme'),
             value: ref.watch(themeProvider) == ThemeMode.dark,
@@ -119,23 +106,23 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
 
           // Support Section
-          _buildSectionHeader('Support'),
+          _buildSectionHeader('Support', primaryColor),
           ListTile(
-            leading: const Icon(Icons.help),
+            leading: Icon(Icons.help_rounded, color: primaryColor),
             title: const Text('Help & Support'),
             onTap: () {
               // TODO: Navigate to help
             },
           ),
           ListTile(
-            leading: const Icon(Icons.feedback),
+            leading: Icon(Icons.feedback_rounded, color: primaryColor),
             title: const Text('Send Feedback'),
             onTap: () {
               // TODO: Open feedback form
             },
           ),
           ListTile(
-            leading: const Icon(Icons.info),
+            leading: Icon(Icons.info_rounded, color: primaryColor),
             title: const Text('About'),
             onTap: () {
               context.push('/about-us');
@@ -145,9 +132,9 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
 
           // Account Actions
-          _buildSectionHeader('Account'),
+          _buildSectionHeader('Logout', primaryColor),
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
+            leading: const Icon(Icons.logout_rounded, color: AppTheme.nopeRed),
             title: const Text('Sign Out'),
             onTap: () async {
               final confirmed = await showDialog<bool>(
@@ -179,15 +166,15 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Color color) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: AppTheme.navyMedium,
+          color: color.withOpacity(0.5),
         ),
       ),
     );

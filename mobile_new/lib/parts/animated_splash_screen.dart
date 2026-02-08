@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+import '../managers/auth_provider.dart';
 
-class AnimatedSplashScreen extends StatefulWidget {
-  const AnimatedSplashScreen({Key? key}) : super(key: key);
+class AnimatedSplashScreen extends ConsumerStatefulWidget {
+  const AnimatedSplashScreen({super.key});
 
   @override
-  State<AnimatedSplashScreen> createState() => _AnimatedSplashScreenState();
+  ConsumerState<AnimatedSplashScreen> createState() => _AnimatedSplashScreenState();
 }
 
-class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
+class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late AnimationController _scaleController;
@@ -60,7 +62,12 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     // ✨ Magic: Use context.go() for safe, state-aware navigation
     Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
-        context.go('/swipe'); 
+        final user = ref.read(currentUserProvider);
+        if (user != null && user.role == 'worker') {
+          context.go('/asap-mode');
+        } else {
+          context.go('/swipe'); 
+        }
       }
     });
   }

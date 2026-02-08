@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../managers/auth_provider.dart';
 import '../../helpers/location_service.dart';
-import 'package:geolocator/geolocator.dart';
+import '../../helpers/content_filter.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
-  const EditProfileScreen({Key? key}) : super(key: key);
+  const EditProfileScreen({super.key});
 
   @override
   ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -93,6 +93,31 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // --- Content Safety Check ---
+    if (!ContentFilter.isSafe(_nameController.text) || 
+        !ContentFilter.isSafe(_bioController.text) ||
+        !ContentFilter.isSafe(_cityController.text) ||
+        !ContentFilter.isSafe(_collegeController.text)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('⚠️ Prohibited Content', style: TextStyle(color: AppTheme.nopeRed, fontWeight: FontWeight.bold)),
+          content: const Text(
+            'One or more fields in your profile contain prohibited language or illegal keywords.\n\n'
+            'Please remove them to save your changes.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('BACK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 

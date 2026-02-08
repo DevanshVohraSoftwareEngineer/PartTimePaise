@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../managers/auth_provider.dart';
 
 class GoogleSignInTestScreen extends ConsumerWidget {
-  const GoogleSignInTestScreen({Key? key}) : super(key: key);
+  const GoogleSignInTestScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

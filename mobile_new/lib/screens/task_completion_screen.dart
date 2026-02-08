@@ -11,23 +11,22 @@ import '../../data_types/payment.dart';
 import 'payment/payment_demand_dialog.dart';
 import '../../services/supabase_service.dart'; // Still using relative but checking
 // actually let's use package:
-import 'package:parttimepaise/services/supabase_service.dart';
 import '../../parts/live_tracking_map.dart'; // Re-adding import
 
 class TaskCompletionScreen extends ConsumerStatefulWidget {
   final String taskId;
 
   const TaskCompletionScreen({
-    Key? key,
+    super.key,
     required this.taskId,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<TaskCompletionScreen> createState() => _TaskCompletionScreenState();
 }
 
 class _TaskCompletionScreenState extends ConsumerState<TaskCompletionScreen> {
-  double _rating = 0;
+  final double _rating = 0;
   final TextEditingController _reviewController = TextEditingController();
   bool _isSubmitting = false;
   bool _isProcessingPayment = false;

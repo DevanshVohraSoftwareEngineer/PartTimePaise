@@ -9,13 +9,13 @@ class ActionButtons extends StatelessWidget {
   final bool canUndo;
 
   const ActionButtons({
-    Key? key,
+    super.key,
     required this.onUndo,
     required this.onNope,
     required this.onSuperLike,
     required this.onLike,
     this.canUndo = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -73,13 +73,12 @@ class _ActionButton extends StatelessWidget {
   final double iconSize;
 
   const _ActionButton({
-    Key? key,
     required this.icon,
     required this.color,
     required this.onPressed,
     required this.size,
     required this.iconSize,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

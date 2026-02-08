@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../config/theme.dart';
 
 class CallScreen extends StatefulWidget {
   final String matchId;
@@ -9,11 +8,11 @@ class CallScreen extends StatefulWidget {
   final String otherUserName;
 
   const CallScreen({
-    Key? key,
+    super.key,
     required this.matchId,
     this.isVoiceOnly = false,
     required this.otherUserName,
-  }) : super(key: key);
+  });
 
   @override
   State<CallScreen> createState() => _CallScreenState();
@@ -42,7 +41,7 @@ class _CallScreenState extends State<CallScreen> {
 
     // Create the engine
     _engine = createAgoraRtcEngine();
-    await _engine.initialize(RtcEngineContext(
+    await _engine.initialize(const RtcEngineContext(
       appId: appId,
       channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
     ));
@@ -190,53 +189,53 @@ class _CallScreenState extends State<CallScreen> {
         children: <Widget>[
           RawMaterialButton(
             onPressed: _onToggleMute,
+            shape: const CircleBorder(),
+            elevation: 2.0,
+            fillColor: _isMuted ? Colors.blueAccent : Colors.white,
+            padding: const EdgeInsets.all(12.0),
             child: Icon(
               _isMuted ? Icons.mic_off : Icons.mic,
               color: _isMuted ? Colors.white : Colors.blueAccent,
               size: 20.0,
             ),
-            shape: const CircleBorder(),
-            elevation: 2.0,
-            fillColor: _isMuted ? Colors.blueAccent : Colors.white,
-            padding: const EdgeInsets.all(12.0),
           ),
           RawMaterialButton(
             onPressed: () => Navigator.pop(context),
+            shape: const CircleBorder(),
+            elevation: 2.0,
+            fillColor: Colors.redAccent,
+            padding: const EdgeInsets.all(15.0),
             child: const Icon(
               Icons.call_end,
               color: Colors.white,
               size: 35.0,
             ),
-            shape: const CircleBorder(),
-            elevation: 2.0,
-            fillColor: Colors.redAccent,
-            padding: const EdgeInsets.all(15.0),
           ),
           if (!widget.isVoiceOnly)
             RawMaterialButton(
               onPressed: _onToggleVideo,
+              shape: const CircleBorder(),
+              elevation: 2.0,
+              fillColor: _isVideoOff ? Colors.blueAccent : Colors.white,
+              padding: const EdgeInsets.all(12.0),
               child: Icon(
                 _isVideoOff ? Icons.videocam_off : Icons.videocam,
                 color: _isVideoOff ? Colors.white : Colors.blueAccent,
                 size: 20.0,
               ),
-              shape: const CircleBorder(),
-              elevation: 2.0,
-              fillColor: _isVideoOff ? Colors.blueAccent : Colors.white,
-              padding: const EdgeInsets.all(12.0),
             ),
           if (!widget.isVoiceOnly)
             RawMaterialButton(
               onPressed: _onSwitchCamera,
+              shape: const CircleBorder(),
+              elevation: 2.0,
+              fillColor: Colors.white,
+              padding: const EdgeInsets.all(12.0),
               child: const Icon(
                 Icons.switch_camera,
                 color: Colors.blueAccent,
                 size: 20.0,
               ),
-              shape: const CircleBorder(),
-              elevation: 2.0,
-              fillColor: Colors.white,
-              padding: const EdgeInsets.all(12.0),
             ),
         ],
       ),

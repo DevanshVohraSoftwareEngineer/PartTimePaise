@@ -7,24 +7,21 @@ import '../../config/theme.dart';
 import '../../managers/matches_provider.dart';
 import '../../managers/auth_provider.dart';
 import '../../parts/chat_bubble.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../kaam/live_tracking_screen.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../data_types/task_match.dart';
 import '../../services/supabase_service.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-import '../../data_types/user.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String matchId;
+  final bool autofocus;
 
   const ChatScreen({
-    Key? key,
+    super.key,
     required this.matchId,
-  }) : super(key: key);
+    this.autofocus = false,
+  });
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -33,11 +30,49 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  Timer? _typingTimer;
+  Timer? _countdownTimer;
+  Duration _remainingTime = const Duration(hours: 24);
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _updateRemainingTime();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _updateRemainingTime();
+    });
+  }
+
+  void _updateRemainingTime() {
+    final matchesState = ref.read(matchesProvider);
+    final matchIndex = matchesState.matches.indexWhere((m) => m.id == widget.matchId);
+    if (matchIndex != -1) {
+      final match = matchesState.matches[matchIndex];
+      final expiryTime = match.matchedAt.add(const Duration(hours: 24));
+      final now = DateTime.now();
+      final difference = expiryTime.difference(now);
+      
+      setState(() {
+        _remainingTime = difference.isNegative ? Duration.zero : difference;
+      });
+      
+      if (difference.isNegative && _countdownTimer?.isActive == true) {
+        _countdownTimer?.cancel();
+      }
+    }
+  }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _typingTimer?.cancel();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -52,19 +87,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _sendMessage() {
+    if (_remainingTime.inSeconds == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chat expired. You can no longer send messages.')),
+      );
+      return;
+    }
     final content = _messageController.text.trim();
     if (content.isEmpty) return;
 
     ref.read(chatProvider(widget.matchId).notifier).sendMessage(content);
     _messageController.clear();
 
-    // Scroll to bottom after sending
     Future.delayed(const Duration(milliseconds: 100), () {
       _scrollToBottom();
     });
   }
-
-  Timer? _typingTimer;
 
   void _onMessageChanged(String value) {
     if (_typingTimer == null || !_typingTimer!.isActive) {
@@ -77,6 +115,81 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(chatProvider(widget.matchId).notifier).sendTypingIndicator(false);
       }
     });
+  }
+
+  Widget _buildExpiryNotice() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.orange.withOpacity(0.05) : Colors.orange.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.auto_delete_outlined, size: 16, color: Colors.orange),
+              const SizedBox(width: 8),
+              Text(
+                "24H EPHEMERAL CHAT",
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "For security and privacy, this chat and all its messages will be permanently deleted 24 hours after the match was created.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.white60 : Colors.black54,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountdownTag() {
+    final bool isExpired = _remainingTime.inSeconds == 0;
+    final String hours = _remainingTime.inHours.toString().padLeft(2, '0');
+    final String minutes = (_remainingTime.inMinutes % 60).toString().padLeft(2, '0');
+    final String seconds = (_remainingTime.inSeconds % 60).toString().padLeft(2, '0');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isExpired ? Colors.red.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: isExpired ? Colors.red : Colors.orange, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_outlined, size: 10, color: isExpired ? Colors.red : Colors.orange),
+          const SizedBox(width: 4),
+          Text(
+            isExpired ? "EXPIRED" : "$hours:$minutes:$seconds",
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: isExpired ? Colors.red : Colors.orange,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleVideoCall(BuildContext context, String otherUserName) {
@@ -118,18 +231,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: source, imageQuality: 70);
-    
     if (image != null) {
-      final file = File(image.path);
-      _sendMediaMessage(file, 'image');
-    }
-  }
-
-  Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
-      _sendMediaMessage(file, 'file');
+      _sendMediaMessage(File(image.path), 'image');
     }
   }
 
@@ -142,110 +245,89 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen for safety errors and warn the user
+    ref.listen<ChatState>(chatProvider(widget.matchId), (previous, next) {
+      if (next.error == 'Message contains prohibited content') {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('⚠️ Safety Warning', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            content: const Text(
+              'Your message was blocked because it contains prohibited words (sexual, abusive, or illegal).\n\n'
+              'Please keep the conversation professional. Continued violations may result in account suspension.',
+              style: TextStyle(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('I UNDERSTAND'),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+
     final chatState = ref.watch(chatProvider(widget.matchId));
     final currentUser = ref.watch(currentUserProvider);
-
-    // Get match details
     final matchesState = ref.watch(matchesProvider);
-    final matchIndex = matchesState.matches.indexWhere((m) => m.id == widget.matchId);
     
+    final matchIndex = matchesState.matches.indexWhere((m) => m.id == widget.matchId);
     if (matchIndex == -1) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     
     final match = matchesState.matches[matchIndex];
-
     final isClient = currentUser?.role == 'client';
     final otherUserName = isClient ? match.workerName : match.clientName;
     final otherUserAvatar = isClient ? match.workerAvatar : match.clientAvatar;
-
+    final otherUserVerified = (isClient ? match.workerVerificationStatus : match.clientVerificationStatus) == 'verified';
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
         backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        elevation: 0.5,
         centerTitle: false,
-        titleSpacing: 0,
         title: Row(
           children: [
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppTheme.grey200,
-                  backgroundImage: otherUserAvatar != null
-                      ? CachedNetworkImageProvider(otherUserAvatar)
-                      : null,
-                  child: otherUserAvatar == null
-                      ? Text(
-                          otherUserName?.substring(0, 1).toUpperCase() ?? 'U',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : AppTheme.navyDark,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      : null,
-                ),
-                if (chatState.isOtherUserOnline)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF34C759), // iOS Green
-                        shape: BoxShape.circle,
-                        border: Border.all(color: isDark ? Colors.black : Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+              backgroundImage: otherUserAvatar != null ? CachedNetworkImageProvider(otherUserAvatar) : null,
+              child: otherUserAvatar == null ? Text(otherUserName?[0] ?? '?', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)) : null,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
+                   Row(
+                     children: [
+                       Text(
+                         otherUserName ?? 'Unknown',
+                         style: TextStyle(
+                           fontSize: 15,
+                           fontWeight: FontWeight.bold,
+                           color: isDark ? Colors.white : Colors.black87,
+                         ),
+                       ),
+                       if (otherUserVerified) ...[
+                         const SizedBox(width: 4),
+                         const Icon(Icons.verified, size: 14, color: Color(0xFF0095F6)),
+                       ],
+                       const SizedBox(width: 8),
+                       _buildCountdownTag(),
+                     ],
+                   ),
                   Text(
-                    otherUserName ?? 'Unknown User',
+                    chatState.isOtherUserOnline ? 'Active now' : 'Active sometime ago',
                     style: TextStyle(
-                      fontSize: 16, 
-                      color: isDark ? Colors.white : Colors.black87, 
-                      fontWeight: FontWeight.w900
+                      fontSize: 11,
+                      color: chatState.isOtherUserOnline ? Colors.green : Colors.grey,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  if (chatState.isTyping)
-                    const Text(
-                      'typing...',
-                      style: TextStyle(
-                        color: Color(0xFFC13584), // Instagram gradient-ish
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  else if (chatState.isOtherUserPresent)
-                    const Text(
-                      'In Chat',
-                      style: TextStyle(color: Color(0xFF34C759), fontSize: 11, fontWeight: FontWeight.bold),
-                    )
-                  else
-                    Text(
-                      chatState.isOtherUserOnline ? 'Online' : 'Offline',
-                      style: TextStyle(
-                        color: chatState.isOtherUserOnline ? const Color(0xFF34C759) : Colors.grey, 
-                        fontSize: 11,
-                        fontWeight: chatState.isOtherUserOnline ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -253,67 +335,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.phone_outlined, size: 22),
+            icon: Icon(Icons.phone_outlined, color: isDark ? Colors.white : Colors.black87),
             onPressed: () => _handleVoiceCall(context, otherUserName ?? 'User'),
           ),
           IconButton(
-            icon: const Icon(Icons.videocam_outlined),
+            icon: Icon(Icons.videocam_outlined, color: isDark ? Colors.white : Colors.black87),
             onPressed: () => _handleVideoCall(context, otherUserName ?? 'User'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              // TODO: Details
-            },
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
-          // Trust Panel (KYC) - Refined
-          _buildKYCPanel(match, isClient),
+          // Permanent Action Bar (Realtime synced)
+          _buildActionOverlay(match, isClient),
           
-          // Negotiation Panel - Refined
-          _buildNegotiationPanel(match, isClient),
-
-          // Messages list
           Expanded(
             child: chatState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    itemCount: chatState.messages.length,
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    itemCount: chatState.messages.length + 1,
                     itemBuilder: (context, index) {
-                      final message = chatState.messages[index];
-                      final isCurrentUser =
-                          message.senderId == currentUser?.id;
-
-                      // Date Grouping
+                      if (index == 0) {
+                        return _buildExpiryNotice();
+                      }
+                      
+                      final message = chatState.messages[index - 1];
+                      final isCurrentUser = message.senderId == currentUser?.id;
                       bool showDateHeader = false;
                       String dateLabel = '';
-                      if (index == 0) {
+                      if (index == 1) {
                         showDateHeader = true;
                       } else {
-                        final prevDate = chatState.messages[index - 1].timestamp;
-                        if (message.timestamp.day != prevDate.day ||
-                            message.timestamp.month != prevDate.month ||
-                            message.timestamp.year != prevDate.year) {
+                        final prevMessage = chatState.messages[index - 2];
+                        if (message.timestamp.day != prevMessage.timestamp.day) {
                           showDateHeader = true;
                         }
                       }
 
                       if (showDateHeader) {
                         final now = DateTime.now();
-                        if (message.timestamp.day == now.day && 
-                            message.timestamp.month == now.month && 
-                            message.timestamp.year == now.year) {
+                        if (message.timestamp.day == now.day && message.timestamp.month == now.month && message.timestamp.year == now.year) {
                           dateLabel = 'TODAY';
-                        } else if (message.timestamp.day == now.subtract(const Duration(days: 1)).day) {
-                          dateLabel = 'YESTERDAY';
                         } else {
-                          dateLabel = DateFormat('MMM dd, yyyy').format(message.timestamp).toUpperCase();
+                          dateLabel = DateFormat('MMMM dd').format(message.timestamp).toUpperCase();
                         }
                       }
 
@@ -321,214 +388,97 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         children: [
                           if (showDateHeader)
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 32),
-                              child: Center(
-                                child: Text(
-                                  dateLabel,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.grey,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Text(
+                                dateLabel,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
                               ),
                             ),
-                          ChatBubble(
-                            message: message,
-                            isCurrentUser: isCurrentUser,
-                          ),
+                          ChatBubble(message: message, isCurrentUser: isCurrentUser),
                         ],
                       );
                     },
                   ),
           ),
-
-          // Snapchat/Instagram Style Input
-          _buildChatInput(context, chatState, currentUser, otherUserName),
+          if (chatState.isTyping)
+             Padding(
+               padding: const EdgeInsets.only(left: 20, bottom: 8),
+               child: Row(
+                 children: [
+                   Text('${otherUserName ?? 'Someone'} is typing...', 
+                     style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic)),
+                 ],
+               ),
+             ),
+          _buildPremiumInput(),
         ],
       ),
     );
   }
 
-  Widget _buildChatInput(BuildContext context, ChatState chatState, User? currentUser, String? otherUserName) {
-    // Logic: Chat is locked if:
-    // 1. Current user has sent a message
-    // 2. Other user has NOT replied yet
-    // Exceptions: First message is always allowed, and system messages don't count as "chats".
-    
+  Widget _buildActionOverlay(TaskMatch match, bool isClient) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final messagesFromOthers = chatState.messages.where((m) => m.senderId != currentUser?.id && m.type != 'system').toList();
-    final messagesFromMe = chatState.messages.where((m) => m.senderId == currentUser?.id && m.type != 'system').toList();
-    
-    final bool isWaitingForReply = messagesFromMe.isNotEmpty && messagesFromOthers.isEmpty;
+    final budget = match.task?.budget ?? 0;
+    final isLocked = match.task?.status == 'in_progress';
 
-    if (isWaitingForReply) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).padding.bottom + 16,
-          left: 16,
-          right: 16,
-          top: 12,
-        ),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.black : Colors.white,
-          border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              'Waiting for $otherUserName to reply',
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You can send more messages once they respond.',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-        left: 16,
-        right: 16,
-        top: 8,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF262626) : const Color(0xFFF2F2F2),
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.camera_alt_rounded, color: isDark ? Colors.white70 : Colors.black54, size: 22),
-                    onPressed: () => _pickImage(ImageSource.camera),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  (match.task?.title ?? 'GIG').toUpperCase(),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '₹${budget.toInt()}',
+                  style: TextStyle(
+                    fontSize: 18, 
+                    fontWeight: FontWeight.w900, 
+                    color: isLocked ? AppTheme.electricMedium : (isDark ? Colors.white : Colors.black)
                   ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87),
-                      decoration: const InputDecoration(
-                        hintText: 'Message...',
-                        hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onChanged: _onMessageChanged,
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  if (_messageController.text.trim().isEmpty) ...[
-                    IconButton(
-                      icon: Icon(Icons.mic_none_rounded, color: isDark ? Colors.white70 : Colors.black54, size: 22),
-                      onPressed: () {
-                        // TODO: Voice message implementation
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.attach_file_rounded, color: isDark ? Colors.white70 : Colors.black54, size: 22),
-                      onPressed: _pickFile,
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.image_outlined, color: isDark ? Colors.white70 : Colors.black54, size: 22),
-                      onPressed: () => _pickImage(ImageSource.gallery),
-                    ),
-                  ] else
-                    TextButton(
-                      onPressed: _sendMessage,
-                      child: const Text(
-                        'Send',
-                        style: TextStyle(
-                          color: Color(0xFF0095F6), // Instagram Blue
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNegotiationPanel(TaskMatch match, bool isClient) {
-    if (match.status != 'active') return const SizedBox.shrink();
-
-    final budget = match.task?.budget ?? 0;
-    final taskStatus = match.task?.status ?? 'assigned';
-    final isFinalized = taskStatus == 'in_progress' || taskStatus == 'completed';
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
-        ],
-      ),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'OFFER PRICE',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
-              ),
-              Text(
-                '₹${budget.toInt()}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF075E54)),
-              ),
-            ],
-          ),
-          const Spacer(),
-          if (isClient && !isFinalized)
+          if (isClient && !isLocked)
             ElevatedButton(
               onPressed: () => _finalizeDeal(match.taskId),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
+                backgroundColor: const Color(0xFF22C55E),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 elevation: 0,
               ),
               child: const Text('FINALIZE DEAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             )
-          else if (isFinalized)
+          else if (isLocked)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFD1E9F6),
+                color: const Color(0xFFE0F2FE),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.lock, size: 14, color: Colors.blue),
+                  Icon(Icons.verified_rounded, size: 16, color: Color(0xFF0EA5E9)),
                   SizedBox(width: 4),
-                  Text('DEAL LOCKED', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11)),
+                  Text(
+                    'DEAL LOCKED', 
+                    style: TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 11)
+                  ),
                 ],
               ),
-            )
+            ),
         ],
       ),
     );
@@ -539,10 +489,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Lock this deal?'),
-        content: const Text('Once finalized, the worker can start the task. The price will be locked for transparency.'),
+        content: const Text('This will move the task to "In Progress". Both parties will see a confirmed green checkmark.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('NOT YET')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('LOCK DEAL')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('CONFIRM')),
         ],
       ),
     );
@@ -551,167 +501,84 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       try {
         await ref.read(supabaseServiceProvider).updateTask(taskId, {'status': 'in_progress'});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Deal Finalized! Worker can now start work.'), backgroundColor: Color(0xFF25D366)),
+          const SnackBar(content: Text('Deal Finalized! 🚀'), backgroundColor: Color(0xFF22C55E)),
         );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
-  Widget _buildKYCPanel(TaskMatch match, bool isClient) {
-    final otherFaceUrl = isClient ? match.workerSelfieUrl : match.clientSelfieUrl;
-    final otherIdUrl = isClient ? match.workerIdCardUrl : match.clientIdCardUrl;
-    final status = isClient ? match.workerVerificationStatus : match.clientVerificationStatus;
+  Widget _buildPremiumInput() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
-    final isVerified = status == 'verified';
-
-    return GestureDetector(
-      onTap: () => _showKYCDetails(context, match, isClient),
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isVerified ? const Color(0xFF25D366) : Colors.orange.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isVerified ? Icons.verified_user : Icons.gpp_maybe, 
-              color: isVerified ? const Color(0xFF25D366) : Colors.orange, 
-              size: 20
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isVerified ? 'Identity Verified' : 'Identity Verification',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold, 
-                      fontSize: 13, 
-                      color: isVerified ? const Color(0xFF075E54) : Colors.orange.shade900
-                    ),
-                  ),
-                  Text(
-                    isVerified ? 'Tap to view ID and Face photo' : 'Verification pending or incomplete',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                  ),
-                ],
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
+        border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.camera_alt_rounded, color: isDark ? Colors.white70 : Colors.black54),
+            onPressed: () => _pickImage(ImageSource.camera),
+          ),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF262626) : const Color(0xFFF2F2F2),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: TextField(
+                controller: _messageController,
+                autofocus: widget.autofocus,
+                style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                decoration: const InputDecoration(
+                  hintText: 'Message...',
+                  hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                onChanged: _onMessageChanged,
+                onSubmitted: (_) => _sendMessage(),
               ),
             ),
-            if (otherFaceUrl != null)
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.grey.shade200,
-                backgroundImage: CachedNetworkImageProvider(otherFaceUrl),
-              )
-            else if (otherIdUrl != null)
-              const Icon(Icons.badge, color: Colors.grey, size: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showKYCDetails(BuildContext context, TaskMatch match, bool isClient) {
-    final otherFaceUrl = isClient ? match.workerSelfieUrl : match.clientSelfieUrl;
-    final otherIdUrl = isClient ? match.workerIdCardUrl : match.clientIdCardUrl;
-    final status = isClient ? match.workerVerificationStatus : match.clientVerificationStatus;
-    final otherName = isClient ? match.workerName : match.clientName;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('User Verification', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  status == 'verified' ? Icons.verified : Icons.info_outline,
-                  color: status == 'verified' ? Colors.green : Colors.orange,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  status == 'verified' ? 'Trust Score: 100% Verified Profile' : 'Verification status: ${status ?? 'None'}',
-                  style: TextStyle(
-                    color: status == 'verified' ? Colors.green : Colors.orange, 
-                    fontWeight: FontWeight.bold
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 32),
-            
-            Text('$otherName\'s Face Photo', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: otherFaceUrl != null 
-                ? CachedNetworkImage(
-                    imageUrl: otherFaceUrl,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(height: 180, color: Colors.grey.shade100, child: const Center(child: CircularProgressIndicator())),
-                    errorWidget: (context, url, error) => Container(height: 180, color: Colors.grey.shade100, child: const Center(child: Icon(Icons.error))),
-                  )
-                : Container(height: 180, color: Colors.grey.shade200, child: const Center(child: Icon(Icons.face, size: 50, color: Colors.grey))),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            Text('$otherName\'s Identity Card', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: otherIdUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: otherIdUrl,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(height: 180, color: Colors.grey.shade100, child: const Center(child: CircularProgressIndicator())),
-                    errorWidget: (context, url, error) => Container(height: 180, color: Colors.grey.shade100, child: const Center(child: Icon(Icons.error))),
-                  )
-                : Container(height: 180, color: Colors.grey.shade200, child: const Center(child: Icon(Icons.badge, size: 50, color: Colors.grey))),
-            ),
-            
-            const Spacer(),
-            const Text(
-              'User verification records are based on submitted Government/College IDs.\nMisuse of this platform results in permanent ban and legal action.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _messageController,
+            builder: (context, value, child) {
+              final isNotEmpty = value.text.trim().isNotEmpty;
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: isNotEmpty
+                    ? TextButton(
+                        onPressed: _sendMessage,
+                        child: const Text(
+                          'Send',
+                          style: TextStyle(color: Color(0xFF0095F6), fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.mic_none_rounded, color: isDark ? Colors.white70 : Colors.black54),
+                            onPressed: () {}, 
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.image_outlined, color: isDark ? Colors.white70 : Colors.black54),
+                            onPressed: () => _pickImage(ImageSource.gallery),
+                          ),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
+

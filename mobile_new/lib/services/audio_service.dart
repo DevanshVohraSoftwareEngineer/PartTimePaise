@@ -16,10 +16,13 @@ class AudioService {
     try {
       _isAlarmPlaying = true;
       await _alarmPlayer.setReleaseMode(ReleaseMode.loop);
-      // Using a generic system-like path for now, user should provide the asset
+      
+      // ✨ ASAP FIX: Providing more context if the file is missing
+      // The user must ensure assets/audio/siren_alert.mp3 exists
       await _alarmPlayer.play(AssetSource('audio/siren_alert.mp3'));
     } catch (e) {
-      print('❌ AudioService: Error starting alarm: $e');
+      print('❌ AudioService: CRITICAL Error starting alarm. Ensure assets/audio/siren_alert.mp3 exists.');
+      print('Error detail: $e');
       _isAlarmPlaying = false;
     }
   }

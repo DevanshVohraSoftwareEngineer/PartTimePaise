@@ -46,7 +46,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   void _initializeRealTimeUpdates() {
-    state = state.copyWith(isLoading: true);
+    if (state.tasks.isEmpty) {
+      state = state.copyWith(isLoading: true);
+    }
     
     // ✨ Magic: Allotment Heartbeat (Ensures no gig gets stuck)
     _triggerAllotmentHeartbeat();
@@ -65,13 +67,19 @@ class TasksNotifier extends StateNotifier<TasksState> {
   void _handleTaskData(List<Map<String, dynamic>> data) {
     final tasks = data.map((json) => Task.fromJson(json)).toList();
     
-    // Deduplication (Enforce uniqueness by ID)
+    // Deduplication (Enforce uniqueness by ID) AND Expiration Filter
     final uniqueTasks = <String, Task>{};
     for (var task in tasks) {
-      uniqueTasks[task.id] = task;
+      if (!task.isExpired) {
+        uniqueTasks[task.id] = task;
+      }
     }
     
-    state = state.copyWith(tasks: uniqueTasks.values.toList(), isLoading: false);
+    // Smooth transition: No flickers when data arrives
+    state = state.copyWith(
+      tasks: uniqueTasks.values.toList(), 
+      isLoading: false
+    );
   }
 
   Future<void> _triggerAllotmentHeartbeat() async {
@@ -84,7 +92,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<void> loadTasks({bool refresh = false}) async {
-    state = state.copyWith(isLoading: true);
+    if (state.tasks.isEmpty || refresh) {
+      state = state.copyWith(isLoading: state.tasks.isEmpty);
+    }
     try {
       final data = await _supabaseService.client
           .from('tasks')
@@ -217,6 +227,9 @@ class MyTasksNotifier extends StateNotifier<MyTasksState> {
   }
 
   void _initializeMyTasksListener() {
+    if (state.tasks.isEmpty) {
+      state = state.copyWith(isLoading: true);
+    }
     // Listen to current user's tasks
     _myTasksSubscription = _supabaseService.getTasksStream().listen(
       (data) {
@@ -229,10 +242,11 @@ class MyTasksNotifier extends StateNotifier<MyTasksState> {
   }
 
   void _handleMyTaskData(List<Map<String, dynamic>> data) {
-    // Filter locally for current user
+    // Filter locally for current user and check for expiration
     final myTasks = data
         .where((json) => json['client_id'] == _userId)
         .map((json) => Task.fromJson(json))
+        .where((task) => !task.isExpired)
         .toList();
     state = state.copyWith(tasks: myTasks, isLoading: false);
   }
@@ -245,7 +259,12 @@ class MyTasksNotifier extends StateNotifier<MyTasksState> {
 
   Future<void> loadMyTasks() async {
     if (_userId == null) return;
-    state = state.copyWith(isLoading: true);
+    
+    // Only show loader if we have no data yet
+    if (state.tasks.isEmpty) {
+      state = state.copyWith(isLoading: true);
+    }
+    
     try {
       final data = await _supabaseService.client
           .from('tasks')
@@ -299,7 +318,9 @@ class AppliedTasksNotifier extends StateNotifier<TasksState> {
   }
 
   void _initializeAppliedTasksListener() {
-    state = state.copyWith(isLoading: true);
+    if (state.tasks.isEmpty) {
+      state = state.copyWith(isLoading: true);
+    }
     
     // Listen to swipes where user_id = me AND direction = right
     _swipesSubscription = _supabaseService.getMyAppliedSwipesStream().listen(
@@ -330,7 +351,10 @@ class AppliedTasksNotifier extends StateNotifier<TasksState> {
           .filter('id', 'in', '(${taskIds.join(',')})')
           .order('created_at', ascending: false);
       
-      final tasks = (tasksData as List).map((json) => Task.fromJson(json)).toList();
+      final tasks = (tasksData as List)
+          .map((json) => Task.fromJson(json))
+          .where((task) => !task.isExpired)
+          .toList();
       state = state.copyWith(tasks: tasks, isLoading: false);
     } catch (e) {
       // If fetch fails (maybe network), keep loading off but show error
@@ -363,7 +387,7 @@ class SwipedTasksNotifier extends StateNotifier<Set<String>> {
     final userId = _supabaseService.currentUser?.id;
     if (userId == null) return;
 
-    // Listen to ALL swipes by this user
+    // Listen to ALL swipes by this user (including debug users)
     _swipesSubscription = _supabaseService.client
         .from('swipes')
         .stream(primaryKey: ['id'])
@@ -377,6 +401,10 @@ class SwipedTasksNotifier extends StateNotifier<Set<String>> {
         print('SwipedTasks error: $e');
       }
     );
+  }
+
+  void addSwipedIdLocally(String taskId) {
+    state = {...state, taskId};
   }
 
   @override

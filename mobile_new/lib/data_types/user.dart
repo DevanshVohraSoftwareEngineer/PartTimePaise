@@ -86,9 +86,9 @@ class User extends Equatable {
       DateTime createdAt;
       try {
         if (json['createdAt'] is String) {
-          createdAt = DateTime.parse(json['createdAt']);
+          createdAt = DateTime.parse(json['createdAt']).toLocal();
         } else if (json['created_at'] is String) {
-          createdAt = DateTime.parse(json['created_at']);
+          createdAt = DateTime.parse(json['created_at']).toLocal();
         } else {
           createdAt = DateTime.now();
         }
@@ -99,7 +99,7 @@ class User extends Equatable {
       DateTime? lastSeen;
       if (json['last_seen'] != null) {
         try {
-           lastSeen = DateTime.parse(json['last_seen']);
+           lastSeen = DateTime.parse(json['last_seen']).toLocal();
         } catch (_) {}
       }
 
@@ -243,9 +243,9 @@ class User extends Equatable {
       lastSeen: lastSeen ?? this.lastSeen,
       currentLat: currentLat ?? this.currentLat,
       currentLng: currentLng ?? this.currentLng,
-      idCardUrl: idCardUrl ?? this.idCardUrl,
-      selfieUrl: selfieUrl ?? this.selfieUrl,
-      verificationStatus: verificationStatus ?? this.verificationStatus,
+      idCardUrl: idCardUrl ?? idCardUrl,
+      selfieUrl: selfieUrl ?? selfieUrl,
+      verificationStatus: verificationStatus ?? verificationStatus,
     );
   }
 

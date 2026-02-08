@@ -8,7 +8,7 @@ import '../../managers/auth_provider.dart';
 import '../../services/navigation_service.dart';
 
 class ClientDashboardScreen extends ConsumerStatefulWidget {
-  const ClientDashboardScreen({Key? key}) : super(key: key);
+  const ClientDashboardScreen({super.key});
 
   @override
   ConsumerState<ClientDashboardScreen> createState() => _ClientDashboardScreenState();
@@ -60,7 +60,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [AppTheme.navyMedium, AppTheme.navyLight],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -153,7 +153,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.currency_rupee, color: AppTheme.likeGreen, size: 28),
+                          const Icon(Icons.currency_rupee, color: AppTheme.likeGreen, size: 28),
                           const SizedBox(width: 8),
                           Text(
                             'Total Spent',
@@ -204,7 +204,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                     alignment: Alignment.center,
                     child: Column(
                       children: [
-                        Icon(Icons.assignment_outlined, size: 48, color: AppTheme.grey400),
+                        const Icon(Icons.assignment_outlined, size: 48, color: AppTheme.grey400),
                         const SizedBox(height: 16),
                         Text(
                           'No tasks posted yet',
@@ -309,7 +309,7 @@ class _ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.lightbulb, color: AppTheme.superLikeBlue),
+                          const Icon(Icons.lightbulb, color: AppTheme.superLikeBlue),
                           const SizedBox(width: 8),
                           Text(
                             'Pro Tips',

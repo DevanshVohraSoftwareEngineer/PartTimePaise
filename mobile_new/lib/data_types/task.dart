@@ -17,6 +17,7 @@ class Task extends Equatable {
   final DateTime? deadline;
   final String? urgency; // 'low', 'medium', 'high'
   final String clientId;
+  final String? workerId;
   final String status;
   final TaskStatus taskStatus; // enum version
   final double? latitude;
@@ -45,6 +46,8 @@ class Task extends Equatable {
   final String? imageUrl;
   final List<String>? images;
   final int? bidsCount;
+  final int? reachCount;
+  final int? realtimeViewersCount;
   final double? distanceMeters;
 
   // Anti-Scam OTPs
@@ -53,6 +56,21 @@ class Task extends Equatable {
   
   // Expiration for time-sensitive tasks
   final DateTime? expiresAt;
+
+  DateTime get effectiveExpiresAt {
+    if (expiresAt != null) return expiresAt!;
+    if (urgency == 'asap') {
+      return createdAt.add(const Duration(minutes: 60));
+    }
+    return createdAt.add(const Duration(hours: 10));
+  }
+
+  bool get isExpired => taskStatus == TaskStatus.open && DateTime.now().isAfter(effectiveExpiresAt);
+
+  Duration get remainingTime {
+    final diff = effectiveExpiresAt.difference(DateTime.now());
+    return diff.isNegative ? Duration.zero : diff;
+  }
 
   const Task({
     required this.id,
@@ -64,6 +82,7 @@ class Task extends Equatable {
     this.deadline,
     this.urgency,
     required this.clientId,
+    this.workerId,
     required this.status,
     required this.taskStatus,
     this.latitude,
@@ -80,6 +99,8 @@ class Task extends Equatable {
     this.imageUrl,
     this.images,
     this.bidsCount,
+    this.reachCount,
+    this.realtimeViewersCount,
     this.distanceMeters,
     this.type = 'general',
     this.pickupLat,
@@ -105,8 +126,9 @@ class Task extends Equatable {
       deadline: json['deadline'] != null ? _parseDateTime(json['deadline']) : null,
       urgency: json['urgency']?.toString(),
       clientId: json['client_id']?.toString() ?? json['clientId']?.toString() ?? '',
+      workerId: json['worker_id']?.toString() ?? json['workerId']?.toString(),
       status: statusStr,
-      taskStatus: TaskStatus.values.firstWhere(
+      taskStatus: statusStr == 'in_progress' ? TaskStatus.inProgress : TaskStatus.values.firstWhere(
         (e) => e.name == statusStr,
         orElse: () => TaskStatus.open,
       ),
@@ -124,6 +146,8 @@ class Task extends Equatable {
       imageUrl: json['image_url']?.toString() ?? json['imageUrl']?.toString(),
       images: json['images'] != null ? List<String>.from(json['images']) : null,
       bidsCount: _safeIntParse(json['bids_count'] ?? json['bidsCount']),
+      reachCount: _safeIntParse(json['reach_count'] ?? json['reachCount']),
+      realtimeViewersCount: _safeIntParse(json['realtime_viewers_count'] ?? json['realtimeViewersCount']),
       distanceMeters: _safeDoubleParse(json['distance_km'] ?? json['distanceKm'] ?? json['distanceMeters']),
       type: json['type']?.toString() ?? 'general',
       pickupLat: _safeDoubleParse(json['pickup_lat']),
@@ -139,9 +163,9 @@ class Task extends Equatable {
 
   static DateTime _parseDateTime(dynamic date) {
     if (date is String) {
-      return DateTime.parse(date);
+      return DateTime.parse(date).toLocal();
     } else if (date is DateTime) {
-      return date;
+      return date.toLocal();
     } else {
       return DateTime.now();
     }
@@ -174,6 +198,7 @@ class Task extends Equatable {
       'deadline': deadline?.toIso8601String(),
       'urgency': urgency,
       'client_id': clientId,
+      'worker_id': workerId,
       'status': status,
       'latitude': latitude,
       'longitude': longitude,
@@ -212,6 +237,7 @@ class Task extends Equatable {
     DateTime? deadline,
     String? urgency,
     String? clientId,
+    String? workerId,
     String? status,
     TaskStatus? taskStatus,
     double? latitude,
@@ -249,6 +275,7 @@ class Task extends Equatable {
       deadline: deadline ?? this.deadline,
       urgency: urgency ?? this.urgency,
       clientId: clientId ?? this.clientId,
+      workerId: workerId ?? this.workerId,
       status: status ?? this.status,
       taskStatus: taskStatus ?? this.taskStatus,
       latitude: latitude ?? this.latitude,
@@ -288,6 +315,7 @@ class Task extends Equatable {
         deadline = null,
         urgency = null,
         clientId = '',
+        workerId = null,
         status = 'open',
         taskStatus = TaskStatus.open,
         latitude = null,
@@ -304,6 +332,8 @@ class Task extends Equatable {
         imageUrl = null,
         images = null,
         bidsCount = null,
+        reachCount = null,
+        realtimeViewersCount = null,
         distanceMeters = null,
         type = 'general',
         pickupLat = null,
@@ -326,6 +356,7 @@ class Task extends Equatable {
         deadline,
         urgency,
         clientId,
+        workerId,
         status,
         taskStatus,
         latitude,
@@ -342,6 +373,8 @@ class Task extends Equatable {
         imageUrl,
         images,
         bidsCount,
+        reachCount,
+        realtimeViewersCount,
         distanceMeters,
         type,
         pickupLat,

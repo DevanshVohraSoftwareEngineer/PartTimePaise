@@ -1,10 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:io';
-// import 'package:realtime_client/src/types.dart'; // Removed bad import
+import '../data_types/earnings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:app_links/app_links.dart';
 
 class SupabaseService {
   static SupabaseService? _instance;
@@ -17,7 +18,7 @@ class SupabaseService {
 
   final _supabase = Supabase.instance.client;
   SupabaseClient get client => _supabase;
-  
+
   // Presence Management
   RealtimeChannel? _presenceChannel;
   final _presenceController = StreamController<int>.broadcast();
@@ -27,19 +28,92 @@ class SupabaseService {
   static const String supabaseUrl = 'https://jonahejqfgeqtkdyscnq.supabase.co';
   static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvbmFoZWpxZmdlcXRrZHlzY25xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxODQ4NDIsImV4cCI6MjA4NDc2MDg0Mn0.VnpNJeKceNEu8p3Ji1Q4eb_m_C0Po1mhIVQ9lySuEFQ';
 
+  // Deep Link Management
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSubscription;
+
   // Initialize Supabase
   static Future<void> initialize() async {
     print('🚀 Initializing Supabase with Fortified Network Stack...');
-    try {
-      await Supabase.initialize(
-        url: supabaseUrl,
-        anonKey: supabaseAnonKey,
-        debug: true,
-      );
-      print('✅ Supabase Network Stack Initialized Successfully');
-    } catch (e) {
-      print('❌ Supabase Fortification Error: $e');
-      rethrow;
+    
+    // Add a small retry loop for DNS/Socket issues during startup
+    int retryCount = 0;
+    while (retryCount < 3) {
+      try {
+        await Supabase.initialize(
+          url: supabaseUrl.trim().toLowerCase(), // Defensive: trim and lowercase
+          anonKey: supabaseAnonKey,
+          debug: kDebugMode,
+        );
+        
+        // Setup manual link handling for iOS robust recovery
+        instance._initDeepLinks();
+        
+        print('✅ Supabase Network Stack Initialized Successfully');
+        return;
+      } catch (e) {
+        retryCount++;
+        print('⚠️ Supabase Initialization Attempt $retryCount failed: $e');
+        if (retryCount >= 3) {
+          print('❌ Supabase Initialization failed after 3 attempts.');
+          rethrow;
+        }
+        if (e.toString().contains('SocketException') || e.toString().contains('host lookup')) {
+           print('🔄 Potential DNS/Socket issue detected. Retrying in 2 seconds...');
+           await Future.delayed(const Duration(seconds: 2));
+        } else {
+           rethrow; 
+        }
+      }
+    }
+  }
+
+  void _initDeepLinks() {
+    _appLinks = AppLinks();
+
+    // Check for cold start link
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) {
+        print('⚡ Cold Start Deep Link Received: $uri');
+        _handleIncomingLink(uri);
+      }
+    });
+
+    // Listen for incoming links while app is open
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      print('⚡ Incoming Deep Link Received: $uri');
+      _handleIncomingLink(uri);
+    }, onError: (err) {
+      print('❌ Deep Link Error: $err');
+    });
+  }
+
+  void _handleIncomingLink(Uri uri) {
+    // Pipe the link into Supabase manually
+    // This solves the issue where iOS doesn't automatically pass links to Supabase
+    // particularly when using custom schemes like parttimepaise://
+    if (uri.toString().contains('type=recovery') || uri.toString().contains('code=')) {
+      print('🔑 Processing Recovery/Auth Link for iPhone...');
+      _supabase.auth.getSessionFromUrl(uri); 
+    }
+  }
+
+  // Helper for retrying network-sensitive operations
+  Future<T> _withRetry<T>(Future<T> Function() operation) async {
+    int attempts = 0;
+    while (true) {
+      try {
+        return await operation();
+      } catch (e) {
+        attempts++;
+        final errorStr = e.toString().toLowerCase();
+        if (attempts < 3 && (errorStr.contains('socketexception') || errorStr.contains('host lookup') || errorStr.contains('clientexception'))) {
+          print('🔄 Socket/Network error. Retry attempt $attempts...');
+          await Future.delayed(Duration(seconds: attempts * 2));
+          continue;
+        }
+        rethrow;
+      }
     }
   }
 
@@ -56,23 +130,34 @@ class SupabaseService {
   
   Future<AuthResponse> signInWithEmail(String email, String password) async {
     print('🔑 Supabase: signInWithEmail for $email');
-    final response = await _supabase.auth.signInWithPassword(
+    return _withRetry(() => _supabase.auth.signInWithPassword(
       email: email,
       password: password,
-    );
-    print('🔑 Supabase: signInWithEmail response received');
-    return response;
+    ));
+  }
+
+  Future<void> resetPasswordForEmail(String email) async {
+    print('🔑 Supabase: resetPasswordForEmail for $email');
+    await _withRetry(() => _supabase.auth.resetPasswordForEmail(
+      email,
+      redirectTo: kIsWeb ? null : 'parttimepaise://reset-password',
+    ));
+  }
+
+  Future<UserResponse> updatePassword(String newPassword) async {
+    print('🔑 Supabase: updatePassword');
+    return _withRetry(() => _supabase.auth.updateUser(
+      UserAttributes(password: newPassword),
+    ));
   }
 
   Future<AuthResponse> signUpWithEmail(String email, String password, Map<String, dynamic> userData) async {
     print('🔑 Supabase: signUpWithEmail for $email');
-    final response = await _supabase.auth.signUp(
+    return _withRetry(() => _supabase.auth.signUp(
       email: email,
       password: password,
       data: userData,
-    );
-    print('🔑 Supabase: signUpWithEmail response received');
-    return response;
+    ));
   }
 
   Future<AuthResponse> signInWithGoogle() async {
@@ -120,6 +205,8 @@ class SupabaseService {
   User? get currentUser => _supabase.auth.currentUser;
   Session? get currentSession => _supabase.auth.currentSession;
   
+  String? get currentUserId => _supabase.auth.currentUser?.id;
+
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
 
   // --- DATABASE METHODS (Instant Dispatch) ---
@@ -143,7 +230,7 @@ class SupabaseService {
 
   // Create a new task
   Future<void> createTask(Map<String, dynamic> taskData) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     // Ensure user profile exists before creating task
@@ -156,13 +243,84 @@ class SupabaseService {
     });
   }
 
+  /// Manually trigger task assignment for a task
+  /// This can be called if the automatic trigger is disabled or for retries
+  Future<void> assignTaskToNearestWorker(String taskId) async {
+    try {
+      // We can call a Postgres RPC function for efficiency
+      await _supabase.rpc('assign_nearest_worker', params: {'p_task_id': taskId});
+      print('✅ Task $taskId assignment check completed');
+    } catch (e) {
+      print('❌ Task Assignment Error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch earnings summary for the current worker
+  Future<WorkerEarningsSummary> getWorkerEarningsSummary() async {
+    final workerId = currentUserId;
+    if (workerId == null) throw Exception('User not authenticated');
+
+    try {
+      // 1. Fetch task-wise earnings from view
+      final earningsResponse = await _supabase
+          .from('worker_earnings_summary')
+          .select()
+          .eq('worker_id', workerId)
+          .order('completed_at', ascending: false);
+
+      final taskEarnings = (earningsResponse as List)
+          .map((json) => TaskEarnings.fromJson(json))
+          .toList();
+
+      // 2. Fetch milestone incentives from RPC
+      final incentiveResponse = await _supabase.rpc(
+        'get_worker_milestone_incentives',
+        params: {'p_worker_id': workerId},
+      );
+
+      final milestoneIncentives = (incentiveResponse as num?)?.toDouble() ?? 0.0;
+      final totalTaskEarnings = taskEarnings.fold(0.0, (sum, item) => sum + item.totalTaskEarnings);
+
+      return WorkerEarningsSummary(
+        taskEarnings: taskEarnings,
+        totalTaskEarnings: totalTaskEarnings,
+        milestoneIncentives: milestoneIncentives,
+        grandTotal: totalTaskEarnings + milestoneIncentives,
+      );
+    } catch (e) {
+      print('❌ Error fetching earnings: $e');
+      rethrow;
+    }
+  }
+
+  /// Update user availability
+  Future<void> setAvailability(bool isOnline) async {
+    try {
+      await _supabase.rpc('set_student_availability', params: {'p_is_online': isOnline});
+      print('✅ Availability set to: ${isOnline ? 'Online' : 'Offline'}');
+    } catch (e) {
+      print('❌ Error setting availability: $e');
+      rethrow;
+    }
+  }
+
+  /// Send lightness heartbeat to keep user online
+  Future<void> sendHeartbeat() async {
+    try {
+      await _supabase.rpc('update_student_heartbeat');
+    } catch (e) {
+      print('❌ Heartbeat failed: $e');
+    }
+  }
+
   // Ensure user profile exists in profiles table
   Future<void> _ensureProfileExists() async {
     final user = currentUser;
-    if (user == null) return;
+    final userId = user?.id;
+    if (userId == null) return;
 
-    final userId = user.id;
-    final userMetadata = user.userMetadata ?? {};
+    final userMetadata = user?.userMetadata ?? {};
 
     // Check if profile exists
     final existingProfile = await _supabase
@@ -176,10 +334,10 @@ class SupabaseService {
       await _supabase.from('profiles').insert({
         'id': userId,
         'name': userMetadata['name'] ?? userMetadata['full_name'] ?? 'User',
-        'email': user.email ?? '',
+        'email': user?.email ?? '',
         'role': userMetadata['role'] ?? 'worker',
-        'college': userMetadata['college'],
-        'created_at': user.createdAt,
+        'college': userMetadata['college'] ?? 'Student',
+        'created_at': user?.createdAt ?? DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       });
     }
@@ -187,7 +345,7 @@ class SupabaseService {
 
   // Swipe logic (Relational version)
   Future<void> createSwipe(String taskId, String direction) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     await _supabase.from('swipes').upsert(
@@ -202,6 +360,25 @@ class SupabaseService {
     // In a real app, a Postgres Trigger would handle match creation automatically
   }
 
+  Future<Set<String>> getUserSwipedTaskIds() async {
+    final userId = currentUserId;
+    if (userId == null) return {};
+
+    try {
+      final response = await _supabase
+          .from('swipes')
+          .select('task_id')
+          .eq('user_id', userId);
+
+      return (response as List)
+          .map((row) => row['task_id'].toString())
+          .toSet();
+    } catch (e) {
+      print('Error fetching swipes: $e');
+      return {};
+    }
+  }
+
   // Chat/Messages Real-time
   Stream<List<Map<String, dynamic>>> getMessagesStream(String matchId) {
     return _supabase
@@ -212,7 +389,7 @@ class SupabaseService {
   }
 
   Future<void> sendMessage(String matchId, String content, {String type = 'text'}) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     await _supabase.from('chat_messages').insert({
@@ -224,7 +401,7 @@ class SupabaseService {
   }
 
   Future<String?> uploadChatMedia(String matchId, File file) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return null;
 
     final fileExt = file.path.split('.').last;
@@ -240,31 +417,13 @@ class SupabaseService {
     }
   }
 
-  Future<String?> uploadKycMedia(String type, File file) async {
-    final userId = currentUser?.id;
-    if (userId == null) return null;
-
-    final fileExt = file.path.split('.').last;
-    final fileName = '${type}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-    final path = '$userId/$fileName';
-
-    try {
-      // Use 'id_verifications' bucket or similar
-      await _supabase.storage.from('kyc_assets').upload(path, file);
-      return _supabase.storage.from('kyc_assets').getPublicUrl(path);
-    } catch (e) {
-      print('KYC Upload error: $e');
-      return null;
-    }
-  }
-
   // --- TYPING INDICATORS (Broadcast) ---
   RealtimeChannel getTypingChannel(String matchId) {
     return _supabase.channel('typing:$matchId');
   }
 
   Future<void> setTypingStatus(String matchId, bool isTyping) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     final channel = getTypingChannel(matchId);
@@ -282,7 +441,7 @@ class SupabaseService {
     required String matchId,
     required bool isVoiceOnly,
   }) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     final channel = _supabase.channel('user_calls:$targetUserId');
@@ -290,7 +449,7 @@ class SupabaseService {
     // ✨ Magic: In Supabase v2, we can send broadcast without manual subscribe if we just want to push
     // However, some versions/configurations expect a subscription to the local instance.
     // We'll use the most robust approach.
-    await channel.subscribe((status, [error]) async {
+    channel.subscribe((status, [error]) async {
       if (status == RealtimeSubscribeStatus.subscribed) {
         await channel.sendBroadcastMessage(
           event: 'incoming_call',
@@ -314,7 +473,7 @@ class SupabaseService {
 
   // Notifications Real-time
   Stream<List<Map<String, dynamic>>> getNotificationsStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value([]);
     
     return _supabase
@@ -340,7 +499,7 @@ class SupabaseService {
 
   // Matches Real-time (Participants only)
   Stream<List<Map<String, dynamic>>> getMatchesStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value([]);
     
     // Listen directly to matches table for best reliability
@@ -353,7 +512,7 @@ class SupabaseService {
 
   // ZOMATO ARCHITECTURE: Listen for selective offerings
   Stream<List<Map<String, dynamic>>> getPendingGigRequestsStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value([]);
 
     return _supabase
@@ -366,7 +525,7 @@ class SupabaseService {
   // Note: relying on client-side filtering or a view if complex joins needed.
   // For now, we assume we fetch swipes where task->client_id = me.
   Stream<List<Map<String, dynamic>>> getIncomingSwipesStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value([]);
 
     // Logic: 
@@ -383,7 +542,7 @@ class SupabaseService {
 
   // Applied Swipes (Worker Perspective: Tasks I swiped right on)
   Stream<List<Map<String, dynamic>>> getMyAppliedSwipesStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value([]);
     
     return _supabase
@@ -397,7 +556,7 @@ class SupabaseService {
   }
 
   Future<String> createMatch(String taskId, String workerId) async {
-    final clientId = currentUser?.id;
+    final clientId = currentUserId;
     if (clientId == null) throw Exception('Not logged in');
 
     // 1. Create the Match
@@ -434,7 +593,7 @@ class SupabaseService {
   }
 
   Future<void> submitBid(String taskId, double amount, String message) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     await _supabase.from('bids').insert({
@@ -454,7 +613,7 @@ class SupabaseService {
   }
 
   Future<void> updateProfile(Map<String, dynamic> profileData) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     // Use a selective update to avoid overwriting fields we didn't intend to
@@ -492,7 +651,7 @@ class SupabaseService {
   }
 
   Future<void> setUserOnline(bool isOnline) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     try {
@@ -513,7 +672,7 @@ class SupabaseService {
   }
 
   Future<void> updateLocation(double lat, double lng) async {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return;
 
     await _supabase.from('profiles').update({
@@ -525,7 +684,7 @@ class SupabaseService {
 
   // Profile Real-time
   Stream<Map<String, dynamic>> getProfileStream() {
-    final userId = currentUser?.id;
+    final userId = currentUserId;
     if (userId == null) return Stream.value({});
 
     return _supabase
@@ -566,6 +725,31 @@ class SupabaseService {
     } catch (e) {
       print('❌ Error fetching KYC data: $e');
       return null;
+    }
+  }
+
+  // --- ANALYTICS TRACKING ---
+  Future<void> trackTaskView(String taskId) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    try {
+      await _supabase.rpc('track_task_view', params: {
+        't_id': taskId,
+        'u_id': userId,
+      });
+    } catch (e) {
+      print('❌ Error tracking task view: $e');
+    }
+  }
+
+  Future<void> updateRealtimeViewers(String taskId, int delta) async {
+    try {
+      await _supabase.rpc('update_realtime_viewers', params: {
+        't_id': taskId,
+        'increment_val': delta,
+      });
+    } catch (e) {
+      print('❌ Error updating realtime viewers: $e');
     }
   }
 }

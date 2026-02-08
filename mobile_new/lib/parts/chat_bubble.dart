@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data_types/message.dart';
 import '../config/theme.dart';
+import '../helpers/content_filter.dart';
 
 class ChatBubble extends StatelessWidget {
   final Message message;
   final bool isCurrentUser;
 
   const ChatBubble({
-    Key? key,
+    super.key,
     required this.message,
     required this.isCurrentUser,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +37,7 @@ class ChatBubble extends StatelessWidget {
     final bool isVideoCall = message.type == 'video_call';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         mainAxisAlignment:
             isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -48,19 +49,26 @@ class ChatBubble extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: CircleAvatar(
-                radius: 14,
+                radius: 16,
                 backgroundColor: AppTheme.grey200,
-                child: Text(
+                backgroundImage: message.senderAvatar != null ? NetworkImage(message.senderAvatar!) : null,
+                child: message.senderAvatar == null ? Text(
                   message.senderName?.substring(0, 1).toUpperCase() ?? 'U',
                   style: const TextStyle(
                     fontSize: 10,
                     color: AppTheme.navyMedium,
                     fontWeight: FontWeight.bold,
                   ),
-                ),
+                ) : null,
               ),
             ),
             const SizedBox(width: 8),
@@ -68,66 +76,103 @@ class ChatBubble extends StatelessWidget {
           
           // Message bubble
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: isCurrentUser
-                    ? const LinearGradient(
-                        colors: [Color(0xFF833AB4), Color(0xFFC13584), Color(0xFFE1306C)],
-                        begin: Alignment.bottomLeft,
-                        end: Alignment.topRight,
-                      )
-                    : null,
-                color: isCurrentUser ? null : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF262626) : const Color(0xFFEFEFEF)),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isCurrentUser ? 20 : 4),
-                  bottomRight: Radius.circular(isCurrentUser ? 4 : 20),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isVideoCall) 
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.videocam, 
-                            size: 14, 
-                            color: isCurrentUser ? Colors.white : AppTheme.superLikeBlue
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Video Call',
-                            style: TextStyle(
-                              fontSize: 11, 
-                              fontWeight: FontWeight.w900,
-                              color: isCurrentUser ? Colors.white : AppTheme.superLikeBlue
-                            ),
-                          ),
-                        ],
+            child: Column(
+              crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: isCurrentUser
+                        ? const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFD946EF)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isCurrentUser ? null : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : Colors.white),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(22),
+                      topRight: const Radius.circular(22),
+                      bottomLeft: Radius.circular(isCurrentUser ? 22 : 4),
+                      bottomRight: Radius.circular(isCurrentUser ? 4 : 22),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isCurrentUser ? 0.2 : 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
-                  
-                  // Message content
-                  Text(
-                    message.content,
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: isCurrentUser ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87),
-                      height: 1.3,
-                      fontSize: 15,
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (message.type == 'image')
+                         ClipRRect(
+                           borderRadius: BorderRadius.circular(12),
+                           child: Image.network(message.content, fit: BoxFit.cover),
+                         )
+                      else if (isVideoCall) 
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.videocam,
+                                size: 16,
+                                color: isCurrentUser ? Colors.white : AppTheme.likeGreen,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                "Video Call",
+                                style: TextStyle(
+                                  color: isCurrentUser ? Colors.white : Colors.black87,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Text(
+                          ContentFilter.filter(message.content),
+                          style: TextStyle(
+                            color: isCurrentUser ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87),
+                            fontSize: 15,
+                            height: 1.3,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('hh:mm a').format(message.timestamp),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.withOpacity(0.7),
+                        ),
+                      ),
+                      if (isCurrentUser) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          message.read ? Icons.done_all : (message.id.startsWith('temp-') ? Icons.access_time_rounded : Icons.done_all),
+                          size: 13,
+                          color: message.read ? const Color(0xFF0095F6) : (message.id.startsWith('temp-') ? Colors.grey[400] : Colors.grey[600]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          
           if (isCurrentUser) const SizedBox(width: 4),
         ],
       ),

@@ -3,16 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../config/theme.dart';
 import '../../managers/matches_provider.dart';
-import '../../parts/match_celebration_dialog.dart';
 import '../../managers/auth_provider.dart';
-import '../../managers/fees_manager.dart';
-import '../../services/supabase_service.dart';
 import '../../data_types/task_match.dart';
+import '../../config/theme.dart';
 
 class MatchesListScreen extends ConsumerStatefulWidget {
-  const MatchesListScreen({Key? key}) : super(key: key);
+  const MatchesListScreen({super.key});
 
   @override
   ConsumerState<MatchesListScreen> createState() => _MatchesListScreenState();
@@ -31,355 +28,380 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
   Widget build(BuildContext context) {
     final matchesState = ref.watch(matchesProvider);
     final currentUser = ref.watch(currentUserProvider);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return DefaultTabController(
-      length: 2, // Always show both: Active Chats and Interested Users
+      length: 2,
       child: Scaffold(
+        backgroundColor: isDark ? Colors.black : Colors.white,
         appBar: AppBar(
-          title: const Text('Matches'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Chats'),
-              Tab(text: 'Interested'),
+          backgroundColor: isDark ? Colors.black : Colors.white,
+          elevation: 0,
+          title: Text(
+            'Chat', // Changed from 'Messages' to clear up space
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          bottom: TabBar(
+            indicatorColor: isDark ? Colors.white : Colors.black,
+            indicatorWeight: 3,
+            labelColor: isDark ? Colors.white : Colors.black,
+            unselectedLabelColor: Colors.grey,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1),
+            tabs: const [
+              Tab(text: 'MESSAGES'),
+              Tab(text: 'INTERESTED'),
             ],
           ),
+          actions: [
+            if (currentUser?.id.startsWith('00000000') ?? false)
+              IconButton(
+                icon: const Icon(Icons.bolt, color: Colors.amber),
+                onPressed: () => ref.read(matchesProvider.notifier).mockIncomingSwipe(),
+                tooltip: "MOCK INTEREST",
+              ),
+            IconButton(
+              icon: Icon(Icons.edit_note_rounded, color: isDark ? Colors.white : Colors.black),
+              onPressed: () {},
+            ),
+          ],
         ),
         body: TabBarView(
           children: [
-             RefreshIndicator(
-               onRefresh: () => ref.read(matchesProvider.notifier).loadMatches(),
-               child: _buildMatchesList(matchesState, currentUser),
-             ),
-             RefreshIndicator(
-               onRefresh: () => ref.read(matchesProvider.notifier).loadMatches(),
-               child: _buildCandidatesList(matchesState),
-             ),
+            // MESSAGES TAB
+            RefreshIndicator(
+              onRefresh: () => ref.read(matchesProvider.notifier).loadMatches(),
+              child: matchesState.matches.isEmpty
+                  ? _buildEmptyState(
+                      'No conversations yet',
+                      Icons.chat_bubble_outline_rounded,
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: matchesState.matches.length,
+                      itemBuilder: (context, index) {
+                        final match = matchesState.matches[index];
+                        return _buildConversationItem(match, currentUser);
+                      },
+                    ),
+            ),
+
+            // INTERESTED TAB
+            RefreshIndicator(
+              onRefresh: () => ref.read(matchesProvider.notifier).loadMatches(),
+              child: matchesState.candidates.isEmpty
+                  ? _buildEmptyState(
+                      'No new interests',
+                      Icons.favorite_border_rounded,
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: matchesState.candidates.length,
+                      itemBuilder: (context, index) {
+                        final candidate = matchesState.candidates[index];
+                        return _buildInterestedItem(candidate);
+                      },
+                    ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCandidatesList(MatchesState state) {
-    if (state.candidates.isEmpty) {
-      return Center(
+  Widget _buildEmptyState(String message, IconData icon) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        alignment: Alignment.center,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.people_outline, size: 60, color: Colors.grey),
+            Icon(icon, size: 60, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            const Text('No new interests yet.', style: TextStyle(color: Colors.grey)),
+            Text(
+              message,
+              style: TextStyle(color: Colors.grey[500], fontSize: 16),
+            ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    return ListView.builder(
-      itemCount: state.candidates.length,
-      padding: const EdgeInsets.all(16),
-      itemBuilder: (context, index) {
-        final candidate = state.candidates[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+  Widget _buildInterestedItem(Map<String, dynamic> candidate) {
+    final String taskId = candidate['task_id'] ?? '';
+    final String workerId = candidate['worker_id'] ?? '';
+    final String workerName = candidate['worker_name'] ?? 'User';
+    final String? workerAvatar = candidate['worker_avatar'];
+    final double budget = (candidate['task_budget'] ?? 0).toDouble();
+    final String taskTitle = candidate['task_title'] ?? 'Task';
+    
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Calculate remaining time
+    final createdAt = DateTime.parse(candidate['created_at']);
+    final expiry = createdAt.add(const Duration(minutes: 60));
+    final remaining = expiry.difference(DateTime.now());
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+    final timeStr = "${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
+    final bool isExpiringSoon = remaining.inMinutes < 10;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Stack(
               children: [
                 CircleAvatar(
-                  radius: 30,
-                  backgroundImage: candidate['worker_avatar'] != null 
-                    ? NetworkImage(candidate['worker_avatar']) 
-                    : null,
-                  child: candidate['worker_avatar'] == null ? const Icon(Icons.person) : null,
+                  radius: 32,
+                  backgroundColor: isDark ? Colors.grey[900] : Colors.grey[200],
+                  backgroundImage: workerAvatar != null ? CachedNetworkImageProvider(workerAvatar) : null,
+                  child: workerAvatar == null ? const Icon(Icons.person, size: 30) : null,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                if (isExpiringSoon)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.nopeRed,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.timer, size: 12, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    workerName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    taskTitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
                     children: [
-                      Text(
-                        candidate['worker_name'] ?? 'Worker',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      Text(
-                        'Interested in: ${candidate['task_title']}',
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, size: 14, color: Colors.amber),
-                          Text(
-                            ' ${candidate['worker_rating']?.toStringAsFixed(1) ?? 'New'}',
-                            style: const TextStyle(fontSize: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34C759).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '₹${budget.toInt()}',
+                          style: const TextStyle(
+                            color: Color(0xFF34C759),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
                           ),
-                        ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Expires in $timeStr',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isExpiringSoon ? AppTheme.nopeRed : Colors.grey,
+                          fontWeight: isExpiringSoon ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
+              ),
+            ),
+            Column(
+              children: [
                 ElevatedButton(
-                  onPressed: () => _handleAcceptCandidate(candidate),
+                  onPressed: () => _handleAccept(taskId, workerId, workerName),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(12),
+                    backgroundColor: isDark ? Colors.white : Colors.black,
+                    foregroundColor: isDark ? Colors.black : Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: const Size(80, 40),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
                   ),
-                  child: const Icon(Icons.check),
+                  child: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () => _handleRejectCandidate(candidate),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(12),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => _handleIgnore(taskId, workerId),
+                  child: Text(
+                    'IGNORE',
+                    style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
-                  child: const Icon(Icons.close),
                 ),
               ],
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _handleRejectCandidate(Map<String, dynamic> candidate) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove User?'),
-        content: const Text('Are you sure you want to remove this user from your interested list?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('NO')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('YES, REMOVE')),
-        ],
+          ],
+        ),
       ),
     );
-
-    if (confirmed == true) {
-      await ref.read(matchesProvider.notifier).rejectCandidate(
-        candidate['task_id'], 
-        candidate['worker_id']
-      );
-    }
   }
 
-  void _handleAcceptCandidate(Map<String, dynamic> candidate) async {
-    // Show a loading indicator if possible, or just wait
-    try {
-      // 1. Accept in Backend
-      final matchId = await ref.read(matchesProvider.notifier).acceptCandidate(
-         candidate['task_id'], 
-         candidate['worker_id']
-      );
-  
-      if (matchId == null) {
-        if (mounted) {
-          final error = ref.read(matchesProvider).error ?? 'Failed to create match. Please try again.';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error)),
-          );
-        }
-        return;
-      }
-  
-      // 2. Show Celebration
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => MatchCelebrationDialog(
-          avatarUrl1: ref.read(currentUserProvider)?.avatarUrl ?? '',
-          avatarUrl2: candidate['worker_avatar'] ?? '',
-          onChatPressed: () {
-            Navigator.of(context).pop(); // Close dialog first
-            context.push('/matches/$matchId/chat');
-          },
-          onKeepSwipingPressed: () {
-            Navigator.of(context).pop();
-          },
+  void _handleIgnore(String taskId, String workerId) async {
+    await ref.read(matchesProvider.notifier).rejectCandidate(taskId, workerId);
+    if (mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Candidate removed.'),
+          behavior: SnackBarBehavior.floating,
         ),
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
     }
   }
 
-  Widget _buildMatchesList(MatchesState matchesState, dynamic currentUser) {
-     if (matchesState.isLoading) {
-        return const Center(child: CircularProgressIndicator());
-     }
-     
-      final activeMatches = matchesState.matches.where((m) {
-        final status = m.task?.status;
-        final isCompleted = status == 'completed' || status == 'cancelled';
-        if (isCompleted) return false;
-        
-        // Active = has a message that isn't the system message
-        return m.lastMessage != null && m.lastMessage != "You matched! Start the conversation.";
-      }).toList();
-
-      final pendingMatches = matchesState.matches.where((m) {
-        final status = m.task?.status;
-        final isCompleted = status == 'completed' || status == 'cancelled';
-        if (isCompleted) return false;
-        
-        // New/Pending = only has system message or no message
-        return m.lastMessage == null || m.lastMessage == "You matched! Start the conversation.";
-      }).toList();
-
-      if (activeMatches.isEmpty && pendingMatches.isEmpty) {
-        return _buildEmptyState();
-      }
-
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (activeMatches.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 8),
-              child: Text('ACTIVE CHATS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-            ),
-            ...activeMatches.map((match) => _buildMatchCard(match, currentUser)),
-            const SizedBox(height: 24),
-          ],
-          if (pendingMatches.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 8),
-              child: Text('NEW MATCHES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-            ),
-            ...pendingMatches.map((match) => _buildMatchCard(match, currentUser)),
-          ],
-        ],
+  void _handleAccept(String taskId, String workerId, String name) async {
+    final success = await ref.read(matchesProvider.notifier).acceptCandidate(taskId, workerId);
+    if (success != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Matched with $name! Starting chat...'),
+          backgroundColor: const Color(0xFF34C759),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
+      
+      // ✨ AUTO-NAVIGATE TO CHAT after acceptance
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          context.push('/matches/$success/chat?autofocus=true');
+        }
+      });
+    }
   }
 
-  Widget _buildMatchCard(TaskMatch match, dynamic currentUser) {
-    final isClient = currentUser?.role == 'client';
+  Widget _buildConversationItem(TaskMatch match, dynamic currentUser) {
+    final bool isClient = currentUser?.role == 'client';
     final otherUserName = isClient ? match.workerName : match.clientName;
     final otherUserAvatar = isClient ? match.workerAvatar : match.clientAvatar;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          radius: 28,
-          backgroundColor: AppTheme.grey200,
-          backgroundImage: otherUserAvatar != null
-              ? CachedNetworkImageProvider(otherUserAvatar)
-              : null,
-          child: otherUserAvatar == null
-              ? Text(
-                  otherUserName?.substring(0, 1).toUpperCase() ?? 'U',
-                  style: AppTheme.heading3.copyWith(
-                    color: AppTheme.navyMedium,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: InkWell(
+        onTap: () => context.push('/matches/${match.id}/chat'),
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+              backgroundImage: otherUserAvatar != null ? CachedNetworkImageProvider(otherUserAvatar) : null,
+              child: otherUserAvatar == null ? Text(otherUserName?[0] ?? '?') : null,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        otherUserName ?? 'User',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      Text(
+                        _formatTime(match.lastMessageAt),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      ),
+                    ],
                   ),
-                )
-              : null,
-        ),
-        title: Text(
-          otherUserName ?? 'Unknown User',
-          style: AppTheme.heading3,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            if (match.task != null)
-              Text(
-                match.task!.title,
-                style: AppTheme.bodyMedium.copyWith(
-                  color: AppTheme.navyMedium,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 2),
+                  if (match.task != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '${match.task!.title} • ₹${match.task!.budget.toInt()}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF34C759).withOpacity(0.8),
+                          letterSpacing: 0.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          match.lastMessage ?? 'Say hello!',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: match.unreadCount > 0 ? (isDark ? Colors.white : Colors.black) : Colors.grey[500],
+                            fontWeight: match.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (match.unreadCount > 0)
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0095F6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            match.unreadCount.toString(),
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ),
-            if (match.lastMessage != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                match.lastMessage!,
-                style: AppTheme.bodyMedium.copyWith(
-                  color: AppTheme.grey700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+            ),
           ],
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (match.lastMessageAt != null)
-              Text(
-                _formatTime(match.lastMessageAt!),
-                style: AppTheme.caption.copyWith(
-                  color: AppTheme.grey500,
-                ),
-              ),
-          ],
-        ),
-        onTap: () {
-          context.push('/matches/${match.id}/chat');
-        },
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 80,
-            color: AppTheme.grey300,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No chats yet!',
-            style: AppTheme.heading2.copyWith(color: AppTheme.grey700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start swiping to find work or workers.',
-            style: AppTheme.bodyMedium.copyWith(color: AppTheme.grey500),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () {
-              context.go('/swipe');
-            },
-            child: const Text('Start Swiping'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
+  String _formatTime(DateTime? time) {
+    if (time == null) return '';
     final now = DateTime.now();
     final diff = now.difference(time);
-
-    if (diff.inDays > 0) {
-      if (diff.inDays == 1) return 'Yesterday';
-      if (diff.inDays < 7) return '${diff.inDays}d ago';
-      return DateFormat('MMM dd').format(time);
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return DateFormat('MMM d').format(time);
   }
 }
+

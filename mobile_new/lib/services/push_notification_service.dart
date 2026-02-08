@@ -1,4 +1,3 @@
-import 'dart:io';
 
 class PushNotificationService {
   static final PushNotificationService _instance = PushNotificationService._internal();

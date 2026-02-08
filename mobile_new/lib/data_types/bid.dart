@@ -37,10 +37,10 @@ class Bid {
       workerFaceUrl: json['worker_face_url']?.toString() ?? json['workerFaceUrl']?.toString(),
       workerIdCardUrl: json['worker_id_card_url']?.toString() ?? json['workerIdCardUrl']?.toString(),
       createdAt: (json['created_at'] ?? json['createdAt']) != null
-          ? DateTime.parse((json['created_at'] ?? json['createdAt']) as String)
+          ? DateTime.parse((json['created_at'] ?? json['createdAt']) as String).toLocal()
           : DateTime.now(),
       updatedAt: (json['updated_at'] ?? json['updatedAt']) != null
-          ? DateTime.parse((json['updated_at'] ?? json['updatedAt']) as String)
+          ? DateTime.parse((json['updated_at'] ?? json['updatedAt']) as String).toLocal()
           : null,
     );
   }

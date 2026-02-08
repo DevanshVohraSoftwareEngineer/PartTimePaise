@@ -39,7 +39,7 @@ class AppConstants {
   
   // Task Status
   static const String taskStatusOpen = 'open';
-  static const String taskStatusMatched = 'matched';
+  static const String taskStatusMatched = 'assigned';
   static const String taskStatusInProgress = 'in_progress';
   static const String taskStatusCompleted = 'completed';
   static const String taskStatusCancelled = 'cancelled';

@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data_types/bid.dart';
 import '../services/supabase_service.dart';
-import 'auth_provider.dart';
 
 // Bids state for a specific task
 class TaskBidsState {

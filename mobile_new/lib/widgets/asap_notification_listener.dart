@@ -4,14 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
-import '../managers/notifications_provider.dart';
 import '../managers/auth_provider.dart';
 import '../managers/gig_requests_provider.dart';
 import '../services/supabase_service.dart';
 import '../widgets/asap_task_overlay.dart';
-import '../parts/match_celebration_dialog.dart';
 import '../data_types/gig_request.dart';
 import '../utils/haptics.dart';
+import '../services/gig_service.dart';
+import '../config/router.dart';
 
 class ASAPNotificationListener extends ConsumerStatefulWidget {
   final Widget child;
@@ -53,10 +53,14 @@ class _ASAPNotificationListenerState extends ConsumerState<ASAPNotificationListe
     }
 
     final currentUser = ref.read(currentUserProvider);
-    debugPrint("ASAP_DEBUG: Current User Online Status: ${currentUser?.isOnline}");
+    final bool isLocallyOnline = ref.read(isOnlineProvider);
     
-    // ✨ Magic: Relaxed check for testing, but typically we want them to be online
-    if (currentUser?.isOnline != true) {
+    debugPrint("ASAP_DEBUG: Current User ID: ${currentUser?.id}");
+    debugPrint("ASAP_DEBUG: DB Online Status: ${currentUser?.isOnline}");
+    debugPrint("ASAP_DEBUG: Local Online Status: $isLocallyOnline");
+    
+    // ✨ Magic: Relaxed check. If they are locally online OR DB says they are online, trigger.
+    if (currentUser?.isOnline != true && !isLocallyOnline) {
       debugPrint("ASAP_DEBUG: User NOT online, ignoring requests");
       return;
     }
@@ -97,14 +101,21 @@ class _ASAPNotificationListenerState extends ConsumerState<ASAPNotificationListe
 
       // UNIVERSAL ALARM: Both ASAP and Today tasks now use the Alarm UI for guaranteed allotment
       if (taskData['urgency'] == 'asap' || taskData['urgency'] == 'today') {
+        // Track reach for the task
+        supabase.trackTaskView(request.taskId);
+        
         _showASAPOverlay(
           requestId: request.id,
           taskId: request.taskId,
           title: taskData['title'],
           budget: taskData['budget'].toString(),
+          urgency: taskData['urgency'] ?? 'asap',
           expiresAt: request.expiresAt,
           pickupLat: taskData['pickup_lat']?.toDouble(),
           pickupLng: taskData['pickup_lng']?.toDouble(),
+          pickupLocation: taskData['pickup_location'] ?? taskData['location'],
+          dropLocation: taskData['dropoff_location'] ?? taskData['title'],
+          estimatedTime: taskData['estimated_time_minutes'],
         );
       } else {
         setState(() => _isLockActive = false);
@@ -120,9 +131,13 @@ class _ASAPNotificationListenerState extends ConsumerState<ASAPNotificationListe
     required String taskId,
     required String title,
     required String budget,
+    required String urgency,
     required DateTime expiresAt,
     double? pickupLat,
     double? pickupLng,
+    String? pickupLocation,
+    String? dropLocation,
+    int? estimatedTime,
   }) {
     if (_currentOverlay != null) return;
 
@@ -132,17 +147,45 @@ class _ASAPNotificationListenerState extends ConsumerState<ASAPNotificationListe
           taskId: taskId,
           title: title,
           budget: budget,
+          urgency: urgency,
           expiresAt: expiresAt,
+          pickupLocation: pickupLocation,
+          dropLocation: dropLocation,
+          estimatedTime: estimatedTime,
           onAccept: () async {
-            final supabaseService = ref.read(supabaseServiceProvider);
-            final result = await supabaseService.client.rpc('accept_gig', params: {'request_id': requestId});
-            final matchId = result as String?;
-            
-            _removeOverlay();
-            
-            if (mounted && matchId != null) {
-              AppHaptics.heavy();
-              context.go('/matches/$matchId/chat');
+            try {
+              final supabaseService = ref.read(supabaseServiceProvider);
+              final result = await supabaseService.client.rpc('accept_gig', params: {'p_request_id': requestId});
+              
+              debugPrint("ASAP_DEBUG: Accept Gig Result: $result");
+              String? matchId;
+              
+              if (result != null) {
+                if (result is String) {
+                  matchId = result;
+                } else if (result is Map && result.containsKey('id')) {
+                  matchId = result['id'].toString();
+                } else if (result is List && result.isNotEmpty) {
+                   // Some RPCs returning setof return a list
+                   final first = result.first;
+                   if (first is String) matchId = first;
+                   else if (first is Map) matchId = first['id']?.toString();
+                }
+              }
+              
+              _removeOverlay();
+              
+              if (mounted && matchId != null) {
+                AppHaptics.heavy();
+                debugPrint("ASAP_DEBUG: Navigating to /chat/$matchId?autofocus=true");
+                // Use global router to ensure navigation works from overlay context
+                ref.read(routerProvider).push('/chat/$matchId?autofocus=true');
+              } else {
+                debugPrint("ASAP_DEBUG: Match ID is null or missing after parsing");
+              }
+            } catch (e) {
+              debugPrint("ASAP_DEBUG: Error accepting gig: $e");
+              rethrow; // Re-throw to be caught by _processAccept for UI feedback
             }
           },
           onReject: () async {

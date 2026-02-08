@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:go_router/go_router.dart';
 import '../../managers/theme_settings_provider.dart';
 import '../../managers/nearby_users_provider.dart';
 import '../../services/supabase_service.dart';
@@ -13,10 +14,8 @@ import '../../utils/haptics.dart';
 import '../../data_types/task.dart';
 import '../../managers/auth_provider.dart';
 import '../../managers/tasks_provider.dart';
-import '../../services/gig_service.dart';
 import '../../config/theme.dart';
-import '../../managers/presence_provider.dart';
-import '../../managers/location_provider.dart'; // Assuming this exists for stabilizedLocationProvider
+// Assuming this exists for stabilizedLocationProvider
 
 class SwipeFeedScreen extends ConsumerStatefulWidget {
   const SwipeFeedScreen({super.key});
@@ -34,14 +33,12 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   void initState() {
     super.initState();
     _startLocationUpdates();
-    
-    // ✨ Magic: Auto-Presence (Always active for trial)
+
+    // ✨ UPDATED: Keep user ACTIVE and ONLINE whenever they are on the Home Feed
+    // This ensures they are visible to others for matching/chatting.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final isOnline = ref.read(currentUserProvider)?.isOnline ?? false;
-      if (!isOnline) {
-        ref.read(authProvider.notifier).toggleOnlineStatus(true);
-        ref.read(gigServiceProvider).goOnline(context);
-      }
+      ref.read(authProvider.notifier).toggleOnlineStatus(true);
+      ref.read(supabaseServiceProvider).setUserOnline(true);
     });
   }
 
@@ -65,10 +62,8 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   }
 
   void _onAction(Task task, bool liked) {
-    // Note: We don't need to add to a local list anymore as the provider's 
-    // stream will update the state once the swipe is created in Supabase.
-    // However, for snappy UI, we could keep a local set if real-time is slow.
-    // For now, let's keep it simple as the stream is usually fast.
+    // Optimistic UI update for snappy feel, especially for debug/offline
+    ref.read(swipedTaskIdsProvider.notifier).addSwipedIdLocally(task.id);
     
     if (liked) {
       _handleLike(task);
@@ -107,17 +102,20 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     final currentUser = ref.watch(currentUserProvider);
     final isOnline = currentUser?.isOnline ?? false;
     final tasksState = ref.watch(tasksProvider);
+    final swipedIds = ref.watch(swipedTaskIdsProvider);
     
-    // ✨ THE MARKETPLACE: Only show 'Today' tasks (swipe through available gigs)
-    final allTodayTasks = tasksState.tasks.where((t) => 
-      t.urgency == 'today' && 
+    // ✨ THE MARKETPLACE: Show all available tasks (Regular/Today Gigs)
+    // Magic Fix: Filter out ASAP tasks because they are handled strictly via the "Direct Request" Overlay system
+    final allMarketplaceTasks = tasksState.tasks.where((t) => 
       (t.status == 'open' || t.status == 'broadcasting') &&
-      t.clientId != currentUser?.id
+      t.clientId != currentUser?.id &&
+      !swipedIds.contains(t.id) &&
+      t.urgency != 'asap'
     ).toList();
 
     // Sorting by proximity
     if (_currentPosition != null) {
-      allTodayTasks.sort((a, b) {
+      allMarketplaceTasks.sort((a, b) {
         if (a.pickupLat == null || a.pickupLng == null) return 1;
         if (b.pickupLat == null || b.pickupLng == null) return -1;
         
@@ -136,7 +134,7 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     // Filter out only those that are NOT already swiped (persisted history)
     final swipedTaskIds = ref.watch(swipedTaskIdsProvider);
     
-    final todayTasks = allTodayTasks.where((t) => 
+    final marketplaceTasks = allMarketplaceTasks.where((t) => 
       !swipedTaskIds.contains(t.id)
     ).toList();
 
@@ -162,14 +160,14 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                     // Layer 2: Scrollable Marketplace List
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: todayTasks.isEmpty 
+                      child: marketplaceTasks.isEmpty 
                         ? (isOnline ? const SizedBox.shrink() : _buildEmptyState())
                         : ListView.builder(
                             controller: _scrollController,
-                            itemCount: todayTasks.length,
+                            itemCount: marketplaceTasks.length,
                             padding: const EdgeInsets.symmetric(vertical: 24),
                             itemBuilder: (context, index) {
-                              final task = todayTasks[index];
+                              final task = marketplaceTasks[index];
                               return TaskItemBar(
                                 task: task,
                                 onLike: () => _onAction(task, true),
@@ -180,7 +178,7 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                     ),
                   
                     // Layer 3: ASAP Scanning UI (Subtle Indicator - NO OVERLAY)
-                    if (isOnline && todayTasks.isEmpty)
+                    if (isOnline && marketplaceTasks.isEmpty)
                       IgnorePointer(
                         child: Center(
                           child: Column(
@@ -192,7 +190,9 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                               Text(
                                 'SCANNING FOR ASAP GIGS',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.electricMedium.withOpacity(0.5),
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? AppTheme.electricMedium.withOpacity(0.5) 
+                                      : Colors.black.withOpacity(0.4),
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 2,
                                 ),
@@ -216,22 +216,27 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   }
 
   Widget _buildAppBar(bool isOnline) {
-    final supabase = ref.read(supabaseServiceProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'PartTimePaise',
-                style: AppTheme.heading1.copyWith(fontSize: 20, color: AppTheme.electricMedium),
+                'Explore',
+                style: TextStyle(
+                  fontSize: 28, 
+                  fontWeight: FontWeight.w800, 
+                  letterSpacing: -1,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
               ),
               // Realtime Active Users Status
               StreamBuilder<int>(
-                stream: supabase.globalOnlineCountStream,
+                stream: ref.read(supabaseServiceProvider).globalOnlineCountStream,
                 initialData: 1,
                 builder: (context, snapshot) {
                   return Row(
@@ -239,19 +244,19 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.greenAccent,
+                        decoration: BoxDecoration(
+                          color: isOnline ? Colors.green : Colors.grey,
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       Text(
-                        '${snapshot.data ?? 1} PLAYERS ONLINE',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.5),
-                          fontSize: 8,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+                        '${snapshot.data ?? 1} ACTIVE NOW',
+                        style: TextStyle(
+                          color: isDark ? Colors.white.withOpacity(0.4) : Colors.black.withOpacity(0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
                         ),
                       ),
                     ],
@@ -275,7 +280,11 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                 ),
               );
             },
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: Icon(
+              Icons.refresh, 
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black, 
+              size: 20
+            ),
           ),
 
           // ✨ Magic: Thunder/Money Theme Toggle
@@ -288,48 +297,36 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
               ref.watch(themeSettingsProvider).backgroundTheme == BackgroundTheme.thunder 
                   ? Icons.bolt 
                   : Icons.attach_money,
-              color: AppTheme.boostGold,
+              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.boostGold : Colors.black,
               size: 20,
             ),
           ),
 
           const SizedBox(width: 8),
 
-          GlassCard(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            borderColor: isOnline ? Colors.green.withOpacity(0.5) : Colors.white.withOpacity(0.2),
-            child: Row(
-              children: [
-                if (isOnline) ...[
+          GestureDetector(
+            onTap: () {
+              context.go('/asap-mode');
+              AppHaptics.medium();
+            },
+            child: GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              borderColor: AppTheme.electricMedium.withOpacity(0.3),
+              child: Row(
+                children: [
                   _buildScanningDot(),
                   const SizedBox(width: 8),
+                  Text(
+                    'ASAP',
+                    style: TextStyle(
+                      fontSize: 12, 
+                      fontWeight: FontWeight.w900, 
+                      letterSpacing: 1,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
                 ],
-                Text(
-                  isOnline ? 'ASAP ON' : 'TODAY',
-                  style: TextStyle(
-                    fontSize: 10, 
-                    fontWeight: FontWeight.bold, 
-                    color: isOnline ? Colors.green : Theme.of(context).textTheme.bodySmall?.color
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 24,
-                  child: Switch(
-                    value: isOnline,
-                    activeColor: Colors.green,
-                    onChanged: (val) {
-                      final gigService = ref.read(gigServiceProvider);
-                      if (val) {
-                        gigService.goOnline(context);
-                      } else {
-                        gigService.goOffline();
-                      }
-                      if (val) AppHaptics.medium();
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -352,22 +349,34 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   }
 
   Widget _buildWalletHeader(dynamic user) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
           children: [
-            const Icon(Icons.account_balance_wallet, color: Colors.greenAccent, size: 20),
-            const SizedBox(width: 12),
+            Icon(Icons.account_balance_wallet_outlined, color: isDark ? Colors.white : Colors.black, size: 24),
+            const SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('WALLET', style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text(
+                  'WALLET BALANCE', 
+                  style: TextStyle(
+                    color: isDark ? Colors.white38 : Colors.black38, 
+                    fontSize: 10, 
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  )
+                ),
                 Text(
                   '₹${user.walletBalance?.toStringAsFixed(2) ?? '0.00'}', 
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: isDark ? Colors.white : Colors.black,
                   ),
                 ),
               ],
@@ -411,19 +420,19 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   Set<Marker> _buildNearbyMarkers(WidgetRef ref) {
     final Set<Marker> markers = {};
     
-    // 1. Nearby Workers (Cyan Dots)
+    // 1. Nearby Workers (Muted Gold Pins)
     final nearbyUsers = ref.watch(nearbyUsersProvider);
     for (var user in nearbyUsers) {
       markers.add(Marker(
         markerId: MarkerId('worker_${user.id}'),
         position: LatLng(user.currentLat ?? 0.0, user.currentLng ?? 0.0),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-        alpha: 0.5,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        alpha: 0.6,
         infoWindow: InfoWindow(title: user.name),
       ));
     }
 
-    // 2. Today Tasks (Magic Purple Tool Pins)
+    // 2. Today Tasks (High-Contrast Red Pins)
     final tasksState = ref.watch(tasksProvider);
     final todayTasks = tasksState.tasks.where((t) => t.urgency == 'today' && t.status == 'open').toList();
     for (var task in todayTasks) {
@@ -431,10 +440,10 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
         markers.add(Marker(
           markerId: MarkerId('task_${task.id}'),
           position: LatLng(task.pickupLat!, task.pickupLng!),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
             title: task.title,
-            snippet: '₹${task.budget.toInt()} - Tap to view',
+            snippet: '₹${task.budget.toInt()} • Elite Campus',
           ),
           onTap: () {
             // We could show a bottom sheet here
@@ -448,20 +457,26 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   }
 
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.done_all, color: AppTheme.likeGreen, size: 64),
+        Icon(Icons.done_all_rounded, color: isDark ? Colors.white24 : Colors.black12, size: 64),
         const SizedBox(height: 16),
         Text(
-          'ALL CAUGHT UP!', 
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)
+          'ALL CAUGHT UP', 
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1,
+            color: isDark ? Colors.white : Colors.black,
+          )
         ),
         const SizedBox(height: 8),
         Text(
-          'No marketplace gigs (10hr) nearby right now.', 
+          'No campus gigs nearby right now.', 
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5)
+            color: isDark ? Colors.white38 : Colors.black38,
+            fontWeight: FontWeight.w600,
           )
         ),
       ],
@@ -469,22 +484,25 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   }
 
   Widget _buildFooter(bool isOnline) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: GlassCard(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppTheme.cyanAccent, size: 16),
-            const SizedBox(width: 8),
+            Icon(Icons.info_outline, color: isDark ? Colors.white70 : Colors.black87, size: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 isOnline 
-                  ? 'ASAP MODE: Stand by for high-urgency alarms. High sound and haptics enabled.'
-                  : 'TODAY MODE: Swipe right on marketplace gigs to show interest. Clients pick the best match.',
+                  ? 'ASAP MODE: Active standby for elite campus events.'
+                  : 'DISCOVER: Explore premium gigs and university services.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w700,
                   fontSize: 10,
+                  letterSpacing: -0.2,
+                  color: isDark ? Colors.white70 : Colors.black87,
                 ),
               ),
             ),

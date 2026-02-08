@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import '../config/theme.dart';
 
 class LiveTrackingMap extends StatefulWidget {
@@ -7,10 +6,10 @@ class LiveTrackingMap extends StatefulWidget {
   final double progress; // 0.0 to 1.0 (completion)
 
   const LiveTrackingMap({
-    Key? key,
+    super.key,
     required this.status,
     this.progress = 0.0,
-  }) : super(key: key);
+  });
 
   @override
   State<LiveTrackingMap> createState() => _LiveTrackingMapState();
@@ -47,7 +46,7 @@ class _LiveTrackingMapState extends State<LiveTrackingMap> with SingleTickerProv
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFFE5F3FD), // Map water/bg color
-        borderRadius: BorderRadius.only(
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
         ),

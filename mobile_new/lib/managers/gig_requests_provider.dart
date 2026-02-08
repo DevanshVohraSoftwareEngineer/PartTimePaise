@@ -22,8 +22,13 @@ class GigRequestsNotifier extends StateNotifier<List<GigRequest>> {
   }
 
   void _init() {
+    print('🚨 GigRequestsNotifier: Initializing stream for user $_userId');
     _subscription = _supabaseService.getPendingGigRequestsStream().listen((data) {
-      state = data.map((e) => GigRequest.fromJson(e)).toList();
+      print('🚨 GigRequestsNotifier: Received ${data.length} requests from DB');
+      state = data
+          .map((e) => GigRequest.fromJson(e))
+          .where((r) => !r.isExpired)
+          .toList();
     });
   }
 

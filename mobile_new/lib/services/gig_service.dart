@@ -6,8 +6,9 @@ import 'package:flutter/material.dart';
 import '../managers/auth_provider.dart';
 import '../managers/location_provider.dart';
 import '../managers/permission_manager.dart';
-import '../services/supabase_service.dart';
 import '../data_types/gig_request.dart';
+
+import '../services/supabase_service.dart';
 
 final gigServiceProvider = Provider<GigService>((ref) {
   return GigService(ref);
@@ -117,7 +118,7 @@ class GigService {
   }
 
   Future<void> acceptGig(String requestId) async {
-     await _supabase.rpc('accept_gig', params: {'request_id': requestId});
+     await _supabase.rpc('accept_gig', params: {'p_request_id': requestId});
   }
 
   Future<void> rejectGig(String requestId) async {

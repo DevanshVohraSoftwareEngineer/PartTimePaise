@@ -7,7 +7,7 @@ import '../../managers/auth_provider.dart';
 import '../../data_types/payment.dart';
 
 class PaymentHistoryScreen extends ConsumerStatefulWidget {
-  const PaymentHistoryScreen({Key? key}) : super(key: key);
+  const PaymentHistoryScreen({super.key});
 
   @override
   ConsumerState<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
@@ -79,7 +79,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.payment,
                         size: 64,
                         color: AppTheme.grey400,

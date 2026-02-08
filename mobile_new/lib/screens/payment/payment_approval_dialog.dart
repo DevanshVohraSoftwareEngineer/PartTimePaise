@@ -14,14 +14,14 @@ class PaymentApprovalDialog extends ConsumerStatefulWidget {
   final String reason;
 
   const PaymentApprovalDialog({
-    Key? key,
+    super.key,
     required this.demandId,
     required this.taskId,
     required this.workerId,
     required this.workerName,
     required this.requestedAmount,
     required this.reason,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<PaymentApprovalDialog> createState() => _PaymentApprovalDialogState();

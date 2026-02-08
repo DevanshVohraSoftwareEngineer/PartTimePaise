@@ -9,12 +9,12 @@ class SlideToConfirm extends StatefulWidget {
   final Color confirmColor;
 
   const SlideToConfirm({
-    Key? key,
+    super.key,
     required this.onConfirm,
     this.label = 'SLIDE TO ACCEPT',
     this.baseColor = const Color(0xFF333333),
     this.confirmColor = AppTheme.likeGreen,
-  }) : super(key: key);
+  });
 
   @override
   State<SlideToConfirm> createState() => _SlideToConfirmState();

@@ -6,7 +6,7 @@ import '../../data_types/task.dart';
 import '../../managers/auth_provider.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({Key? key}) : super(key: key);
+  const SearchScreen({super.key});
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -18,7 +18,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _selectedCategory = 'All';
   String _selectedSort = 'Newest';
   RangeValues _priceRange = const RangeValues(0, 5000);
-  double _maxDistance = 50;
+  final double _maxDistance = 50;
 
   final List<String> _categories = [
     'All',
@@ -158,7 +158,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         deleteIcon: const Icon(Icons.close, size: 16),
         onDeleted: onRemove,
         backgroundColor: AppTheme.superLikeBlue.withOpacity(0.1),
-        labelStyle: TextStyle(color: AppTheme.superLikeBlue),
+        labelStyle: const TextStyle(color: AppTheme.superLikeBlue),
       ),
     );
   }
@@ -168,7 +168,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          const Icon(
             Icons.search_off,
             size: 64,
             color: AppTheme.grey400,
@@ -237,7 +237,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.currency_rupee, size: 16, color: AppTheme.likeGreen),
+                  const Icon(Icons.currency_rupee, size: 16, color: AppTheme.likeGreen),
                   Text(
                     task.budget.toStringAsFixed(0),
                     style: AppTheme.bodyMedium.copyWith(
@@ -246,7 +246,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Icon(Icons.location_on, size: 16, color: AppTheme.grey500),
+                  const Icon(Icons.location_on, size: 16, color: AppTheme.grey500),
                   Expanded(
                     child: Text(
                       task.location ?? 'Remote',
@@ -256,7 +256,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                   if (task.bidsCount != null) ...[
                     const SizedBox(width: 16),
-                    Icon(Icons.people, size: 16, color: AppTheme.superLikeBlue),
+                    const Icon(Icons.people, size: 16, color: AppTheme.superLikeBlue),
                     Text(
                       '${task.bidsCount} bids',
                       style: AppTheme.caption.copyWith(color: AppTheme.superLikeBlue),
@@ -429,7 +429,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         final query = _searchQuery.toLowerCase();
         final matchesTitle = task.title.toLowerCase().contains(query);
         final matchesDescription = task.description.toLowerCase().contains(query);
-        final matchesCategory = task.category?.toLowerCase().contains(query) ?? false;
+        final matchesCategory = task.category.toLowerCase().contains(query) ?? false;
         if (!matchesTitle && !matchesDescription && !matchesCategory) {
           return false;
         }

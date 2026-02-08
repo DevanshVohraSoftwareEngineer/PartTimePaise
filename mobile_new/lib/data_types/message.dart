@@ -31,7 +31,7 @@ class Message extends Equatable {
       matchId: json['match_id']?.toString() ?? json['matchId']?.toString() ?? '',
       senderId: json['sender_id']?.toString() ?? json['senderId']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
-      timestamp: DateTime.parse(json['created_at'] ?? json['timestamp'] ?? DateTime.now().toIso8601String()),
+      timestamp: DateTime.parse(json['created_at'] ?? json['timestamp'] ?? DateTime.now().toIso8601String()).toLocal(),
       read: json['read'] as bool? ?? false,
       senderName: json['sender_name']?.toString() ?? json['senderName']?.toString(),
       senderAvatar: json['sender_avatar']?.toString() ?? json['senderAvatar']?.toString(),
@@ -72,7 +72,7 @@ class Message extends Equatable {
       read: read ?? this.read,
       senderName: senderName ?? this.senderName,
       senderAvatar: senderAvatar ?? this.senderAvatar,
-      type: type ?? this.type,
+      type: type ?? type,
     );
   }
 

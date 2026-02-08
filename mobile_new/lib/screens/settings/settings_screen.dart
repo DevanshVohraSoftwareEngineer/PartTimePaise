@@ -4,7 +4,7 @@ import '../../config/theme.dart';
 import '../../managers/location_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -328,7 +328,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       subtitle: Text(subtitle, style: AppTheme.caption.copyWith(color: AppTheme.grey600)),
       value: value,
       onChanged: onChanged,
-      activeColor: AppTheme.superLikeBlue,
+      activeThumbColor: AppTheme.superLikeBlue,
     );
   }
 
@@ -372,7 +372,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         subtitle,
         style: AppTheme.caption.copyWith(color: AppTheme.nopeRed.withOpacity(0.8)),
       ),
-      trailing: Icon(Icons.chevron_right, color: AppTheme.nopeRed),
+      trailing: const Icon(Icons.chevron_right, color: AppTheme.nopeRed),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
     );
@@ -494,16 +494,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
-        content: Column(
+        content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'This action cannot be undone. All your data, tasks, and bids will be permanently deleted.',
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Type "DELETE" to confirm',
                 border: OutlineInputBorder(),
               ),

@@ -114,9 +114,9 @@ class TaskMatch extends Equatable {
 
   static DateTime _parseDateTime(dynamic date) {
     if (date is String) {
-      return DateTime.parse(date);
+      return DateTime.parse(date).toLocal();
     } else if (date is DateTime) {
-      return date;
+      return date.toLocal();
     } else {
       return DateTime.now();
     }

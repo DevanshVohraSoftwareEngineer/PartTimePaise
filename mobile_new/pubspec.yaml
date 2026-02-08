@@ -31,6 +31,7 @@ dependencies:
   # Location Services
   geolocator: ^10.1.0
   google_maps_flutter: ^2.5.3
+  flutter_polyline_points: ^2.1.0
   
   # Storage
   shared_preferences: ^2.2.2
@@ -60,6 +61,8 @@ dependencies:
   audioplayers: ^5.2.1
   agora_rtc_engine: ^6.5.3
   file_picker: ^8.1.7
+  shimmer: 3.0.0
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:
@@ -97,3 +100,4 @@ flutter:
     - assets/images/
     - assets/icon/
     - assets/audio/
+    - shorebird.yaml

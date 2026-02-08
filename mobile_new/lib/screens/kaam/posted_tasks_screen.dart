@@ -5,12 +5,11 @@ import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../managers/tasks_provider.dart';
 import '../../data_types/task.dart';
-import '../../managers/auth_provider.dart';
 import '../../services/supabase_service.dart';
-import '../../services/navigation_service.dart';
+import '../../widgets/countdown_timer.dart';
 
 class PostedTasksScreen extends ConsumerStatefulWidget {
-  const PostedTasksScreen({Key? key}) : super(key: key);
+  const PostedTasksScreen({super.key});
 
   @override
   ConsumerState<PostedTasksScreen> createState() => _PostedTasksScreenState();
@@ -36,7 +35,7 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.read(myTasksProvider.notifier).loadMyTasks(),
-        child: myTasksState.isLoading
+        child: (myTasksState.isLoading && myTasksState.tasks.isEmpty)
             ? const Center(child: CircularProgressIndicator())
             : myTasksState.tasks.isEmpty
                 ? SingleChildScrollView(
@@ -52,8 +51,23 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                     padding: const EdgeInsets.all(16),
                     itemBuilder: (context, index) {
                       final task = myTasksState.tasks[index];
-                      return Card(
+                      final primaryColor = Theme.of(context).primaryColor;
+                      return Container(
                         margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -66,26 +80,31 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                   Expanded(
                                       child: Text(
                                         task.title,
-                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          color: primaryColor,
                                         ),
                                       ),
                                   ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
+                                      horizontal: 10,
+                                      vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
                                       color: _getStatusColor(task.status)
                                           .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: _getStatusColor(task.status).withOpacity(0.3), width: 0.5),
                                     ),
                                     child: Text(
                                       task.status.toUpperCase(),
-                                      style: AppTheme.caption.copyWith(
+                                      style: TextStyle(
                                         color: _getStatusColor(task.status),
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 9,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
                                   ),
@@ -115,13 +134,14 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                       Icon(
                                         Icons.currency_rupee,
                                         size: 16,
-                                        color: AppTheme.getAdaptiveGrey600(context),
+                                        color: primaryColor.withOpacity(0.5),
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
                                         '₹${task.budget.toStringAsFixed(0)}',
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          fontWeight: FontWeight.w600,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          color: primaryColor,
                                         ),
                                       ),
                                     ],
@@ -133,12 +153,12 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                         Icon(
                                           Icons.schedule,
                                           size: 16,
-                                          color: AppTheme.getAdaptiveGrey600(context),
+                                          color: primaryColor.withOpacity(0.5),
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
                                           DateFormat('MMM dd, yyyy').format(task.deadline!),
-                                          style: AppTheme.bodyMedium,
+                                          style: TextStyle(color: primaryColor.withOpacity(0.7), fontSize: 13),
                                         ),
                                       ],
                                     ),
@@ -148,14 +168,15 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.navyLightest,
+                                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                       child: Text(
                                         task.category,
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: isDark ? AppTheme.navyMedium : AppTheme.navyDark,
-                                          fontWeight: FontWeight.w600,
+                                        style: TextStyle(
+                                          color: primaryColor.withOpacity(0.8),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 10,
                                         ),
                                       ),
                                   ),
@@ -164,41 +185,43 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
   
                               const SizedBox(height: 12),
   
-                              // Stats
-                              Row(
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.currency_rupee,
-                                        size: 16,
-                                        color: AppTheme.grey500,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '₹${task.budget.toStringAsFixed(0)}',
-                                        style: AppTheme.caption,
-                                      ),
-                                    ],
-                                  ),
-                                  if (task.bidsCount != null) ...[
-                                    const SizedBox(width: 16),
-                                    Row(
+                              // Insights / Analytics
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50]!.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: primaryColor.withOpacity(0.05)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _buildStatColumn(context, Icons.visibility_outlined, '${task.reachCount ?? 0}', 'REACH'),
+                                    _buildStatColumn(context, Icons.remove_red_eye, '${task.realtimeViewersCount ?? 0}', 'VIEWING', isActive: (task.realtimeViewersCount ?? 0) > 0),
+                                    _buildStatColumn(context, Icons.people_outline, '${task.bidsCount ?? 0}', 'BIDS'),
+                                    Column(
                                       children: [
-                                        const Icon(
-                                          Icons.people,
-                                          size: 16,
-                                          color: AppTheme.grey500,
+                                        CountdownTimer(
+                                          expiresAt: task.effectiveExpiresAt,
+                                          textStyle: TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14,
+                                            color: primaryColor,
+                                          ),
                                         ),
-                                        const SizedBox(width: 4),
                                         Text(
-                                          '${task.bidsCount} bids',
-                                          style: AppTheme.caption,
+                                          'TIME LEFT',
+                                          style: TextStyle(
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w900,
+                                            color: primaryColor.withOpacity(0.4),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ],
-                                ],
+                                ),
                               ),
                               const SizedBox(height: 12),
   
@@ -209,17 +232,18 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.navyLightest,
-                                    border: Border.all(color: AppTheme.navyMedium),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.02),
+                                    border: Border.all(color: primaryColor.withOpacity(0.1)),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
                                     children: [
                                       Text(
                                         task.status == 'assigned' ? 'START OTP' : 'END OTP',
-                                        style: AppTheme.caption.copyWith(
-                                          color: AppTheme.navyMedium,
-                                          fontWeight: FontWeight.bold,
+                                        style: TextStyle(
+                                          color: primaryColor.withOpacity(0.4),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 10,
                                           letterSpacing: 1.2,
                                         ),
                                       ),
@@ -228,16 +252,19 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                         task.status == 'assigned'
                                             ? (task.startOtp ?? '....')
                                             : (task.endOtp ?? '....'),
-                                        style: AppTheme.heading2.copyWith(
-                                          color: AppTheme.navyDark,
+                                        style: TextStyle(
+                                          color: primaryColor,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w900,
                                           letterSpacing: 4,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         'Share this with the worker ONLY when they ${task.status == 'assigned' ? 'arrive' : 'finish'}.',
-                                        style: AppTheme.caption.copyWith(
-                                          color: AppTheme.getAdaptiveGrey600(context),
+                                        style: TextStyle(
+                                          color: primaryColor.withOpacity(0.4),
+                                          fontSize: 10,
                                           fontStyle: FontStyle.italic,
                                         ),
                                         textAlign: TextAlign.center,
@@ -255,10 +282,12 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                     Expanded(
                                       child: OutlinedButton.icon(
                                         onPressed: () => _editTask(task),
-                                        icon: const Icon(Icons.edit),
-                                        label: const Text('Edit'),
+                                        icon: const Icon(Icons.edit, size: 16),
+                                        label: const Text('EDIT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor: AppTheme.navyMedium,
+                                          foregroundColor: primaryColor,
+                                          side: BorderSide(color: primaryColor.withOpacity(0.2)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                       ),
                                     ),
@@ -267,10 +296,12 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                     Expanded(
                                       child: OutlinedButton.icon(
                                         onPressed: () => _closeTask(task),
-                                        icon: const Icon(Icons.close),
-                                        label: const Text('Close'),
+                                        icon: const Icon(Icons.close, size: 16),
+                                        label: const Text('CLOSE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor: AppTheme.nopeRed,
+                                          foregroundColor: Colors.red,
+                                          side: BorderSide(color: Colors.red.withOpacity(0.2)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                       ),
                                     ),
@@ -278,8 +309,13 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                                     Expanded(
                                       child: ElevatedButton.icon(
                                         onPressed: () => _viewTaskDetails(task),
-                                        icon: const Icon(Icons.visibility),
-                                        label: const Text('View Details'),
+                                        icon: Icon(Icons.visibility, size: 16, color: isDark ? Colors.black : Colors.white),
+                                        label: Text('VIEW DETAILS', style: TextStyle(color: isDark ? Colors.black : Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryColor,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          elevation: 0,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -300,12 +336,12 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
         mainAxisSize: MainAxisSize.min, // Changed to min for better alignment
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          const Icon(
             Icons.assignment_outlined,
             size: 80,
             color: AppTheme.grey300,
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           Text(
             'No posted tasks yet!',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -320,7 +356,7 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
                 ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -372,5 +408,38 @@ class _PostedTasksScreenState extends ConsumerState<PostedTasksScreen> {
 
   void _viewTaskDetails(Task task) {
     context.push('/task-details/${task.id}');
+  }
+
+  Widget _buildStatColumn(BuildContext context, IconData icon, String value, String label, {bool isActive = false}) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isActive ? Colors.green : Colors.grey,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: isActive ? Colors.green : Colors.grey,
+          ),
+        ),
+      ],
+    );
   }
 }

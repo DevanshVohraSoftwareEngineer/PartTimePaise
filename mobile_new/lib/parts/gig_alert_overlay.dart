@@ -12,10 +12,10 @@ class GigAlertOverlay extends ConsumerStatefulWidget {
   final VoidCallback onDismiss;
 
   const GigAlertOverlay({
-    Key? key,
+    super.key,
     required this.request,
     required this.onDismiss,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<GigAlertOverlay> createState() => _GigAlertOverlayState();
@@ -118,7 +118,7 @@ class _GigAlertOverlayState extends ConsumerState<GigAlertOverlay> with SingleTi
                         color: AppTheme.primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
+                      child: const Text(
                         'NEW GIG',
                         style: TextStyle(
                           color: AppTheme.primaryColor,

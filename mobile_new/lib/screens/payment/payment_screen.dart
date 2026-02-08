@@ -9,7 +9,7 @@ class PaymentScreen extends ConsumerStatefulWidget {
   final String? taskId;
   final double amount;
 
-  const PaymentScreen({Key? key, this.taskId, required this.amount}) : super(key: key);
+  const PaymentScreen({super.key, this.taskId, required this.amount});
 
   @override
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
@@ -270,7 +270,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             ),
             child: Row(
               children: [
-                Icon(Icons.security, color: AppTheme.likeGreen),
+                const Icon(Icons.security, color: AppTheme.likeGreen),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -355,7 +355,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
               ),
               if (isSelected)
-                Icon(
+                const Icon(
                   Icons.check_circle,
                   color: AppTheme.likeGreen,
                 ),

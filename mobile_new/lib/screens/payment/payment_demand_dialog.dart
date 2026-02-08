@@ -11,11 +11,11 @@ class PaymentDemandDialog extends ConsumerStatefulWidget {
   final double maxAmount;
 
   const PaymentDemandDialog({
-    Key? key,
+    super.key,
     required this.taskId,
     required this.clientId,
     required this.maxAmount,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<PaymentDemandDialog> createState() => _PaymentDemandDialogState();

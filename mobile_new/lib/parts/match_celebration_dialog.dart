@@ -12,13 +12,13 @@ class MatchCelebrationDialog extends StatefulWidget {
   final VoidCallback? onVerifyIdentityPressed; // Added callback
 
   const MatchCelebrationDialog({
-    Key? key,
+    super.key,
     required this.avatarUrl1,
     required this.avatarUrl2,
     required this.onChatPressed,
     required this.onKeepSwipingPressed,
     this.onVerifyIdentityPressed,
-  }) : super(key: key);
+  });
 
   @override
   State<MatchCelebrationDialog> createState() => _MatchCelebrationDialogState();

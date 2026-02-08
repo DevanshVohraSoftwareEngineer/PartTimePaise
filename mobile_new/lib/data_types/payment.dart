@@ -99,8 +99,8 @@ class Payment extends Equatable {
   }
 
   static DateTime _parseDateTime(dynamic date) {
-    if (date is String) return DateTime.parse(date);
-    if (date is DateTime) return date;
+    if (date is String) return DateTime.parse(date).toLocal();
+    if (date is DateTime) return date.toLocal();
     return DateTime.now();
   }
 

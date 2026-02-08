@@ -1,33 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:intl/intl.dart';
 import '../data_types/task.dart';
 import '../config/theme.dart';
 import '../utils/distance_calculator.dart';
 import '../widgets/glass_card.dart';
+import '../services/supabase_service.dart';
+import '../widgets/countdown_timer.dart';
 
-class TaskItemBar extends StatefulWidget {
+class TaskItemBar extends ConsumerStatefulWidget {
   final Task task;
   final VoidCallback onLike;
   final VoidCallback onNope;
 
   const TaskItemBar({
-    Key? key,
+    super.key,
     required this.task,
     required this.onLike,
     required this.onNope,
-  }) : super(key: key);
+  });
 
   @override
-  State<TaskItemBar> createState() => _TaskItemBarState();
+  ConsumerState<TaskItemBar> createState() => _TaskItemBarState();
 }
 
-class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStateMixin {
+class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Track reach when the item is shown
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(supabaseServiceProvider).trackTaskView(widget.task.id);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final timeAgo = _getTimeAgo(widget.task.createdAt);
     final distance = widget.task.distanceMeters != null 
         ? DistanceCalculator.formatDistance(widget.task.distanceMeters!) 
         : 'Unknown dist';
@@ -50,7 +60,7 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
                   child: Row(
                     children: [
                       // Action - Nope
-                      _buildCircleButton(Icons.close, Colors.red, widget.onNope),
+                      _buildCircleButton(Icons.close, Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black54, widget.onNope),
                       const SizedBox(width: 12),
                       
                       // Title and Info
@@ -60,18 +70,37 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
                           children: [
                             Text(
                               widget.task.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800, 
+                                fontSize: 16, 
+                                letterSpacing: -0.8
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Text(timeAgo, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                CountdownTimer(
+                                  expiresAt: widget.task.effectiveExpiresAt,
+                                  textStyle: const TextStyle(
+                                    fontSize: 10, 
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
-                                const Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                Container(width: 3, height: 3, decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black12, 
+                                  shape: BoxShape.circle
+                                )),
                                 const SizedBox(width: 8),
-                                Text(distance, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                Text(distance.toUpperCase(), style: TextStyle(
+                                  fontSize: 10, 
+                                  fontWeight: FontWeight.w800, 
+                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38, 
+                                  letterSpacing: 0.8
+                                )),
                               ],
                             ),
                           ],
@@ -81,12 +110,17 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
                       // Amount
                       Text(
                         '₹${widget.task.budget.toInt()}',
-                        style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.likeGreen, fontSize: 18),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900, 
+                          color: Theme.of(context).primaryColor, 
+                          fontSize: 20,
+                          letterSpacing: -1.2,
+                        ),
                       ),
                       
                       const SizedBox(width: 12),
                       // Action - Like
-                      _buildCircleButton(Icons.check, Colors.green, widget.onLike),
+                      _buildCircleButton(Icons.check_rounded, Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black, widget.onLike),
                     ],
                   ),
                 ),
@@ -102,19 +136,18 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
   }
 
   Widget _buildCircleButton(IconData icon, Color color, VoidCallback onTap) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
-        // Prevent expansion when clicking action buttons
         onTap();
       },
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black,
           shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.3)),
         ),
-        child: Icon(icon, color: color, size: 20),
+        child: Icon(icon, color: isDark ? Colors.black : Colors.white, size: 18),
       ),
     );
   }
@@ -137,7 +170,7 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
           
           Row(
             children: [
-              const Icon(Icons.category, size: 14, color: Colors.blue),
+              Icon(Icons.category, size: 14, color: Theme.of(context).primaryColor.withOpacity(0.5)),
               const SizedBox(width: 4),
               Text(widget.task.category, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             ],
@@ -146,17 +179,18 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
           const SizedBox(height: 20),
           
           // Poster Info Header
-          const Text('POSTED BY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+          Text('POSTED BY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor.withOpacity(0.3), letterSpacing: 1.5)),
           const SizedBox(height: 12),
           
           Row(
             children: [
               CircleAvatar(
                 radius: 20,
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.05),
                 backgroundImage: widget.task.clientAvatar != null 
                     ? CachedNetworkImageProvider(widget.task.clientAvatar!) 
                     : null,
-                child: widget.task.clientAvatar == null ? const Icon(Icons.person) : null,
+                child: widget.task.clientAvatar == null ? Icon(Icons.person, color: Theme.of(context).primaryColor.withOpacity(0.3)) : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -169,14 +203,14 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
                 ),
               ),
               if (widget.task.clientVerificationStatus == 'verified')
-                const Icon(Icons.verified, color: Colors.blue, size: 18),
+                Icon(Icons.verified, color: Theme.of(context).primaryColor, size: 18),
             ],
           ),
           
           const SizedBox(height: 24),
           
           // KYC Proofs Row
-          const Text('IDENTITY PROOFS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
+          Text('IDENTITY PROOFS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor.withOpacity(0.3), letterSpacing: 1.5)),
           const SizedBox(height: 12),
           
           Row(
@@ -225,13 +259,5 @@ class _TaskItemBarState extends State<TaskItemBar> with SingleTickerProviderStat
         );
       }),
     );
-  }
-
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final diff = now.difference(dateTime);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
   }
 }

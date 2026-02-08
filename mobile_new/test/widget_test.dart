@@ -13,7 +13,7 @@ import 'package:parttimepaise/main.dart';
 void main() {
   testWidgets('App builds without crashing', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const MyApp(backendInitialized: true));
 
     // Verify that the app builds and shows something
     expect(find.byType(MaterialApp), findsOneWidget);

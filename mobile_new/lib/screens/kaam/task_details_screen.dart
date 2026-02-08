@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'task_navigation_screen.dart';
 import '../../config/theme.dart';
 import '../../data_types/task.dart';
 import '../../data_types/bid.dart';
@@ -8,12 +10,15 @@ import '../../managers/tasks_provider.dart';
 import '../../managers/bids_provider.dart';
 import '../../managers/auth_provider.dart';
 import '../../utils/validators.dart';
+import '../../services/supabase_service.dart';
+import '../../widgets/countdown_timer.dart';
+import '../../helpers/content_filter.dart';
 import 'package:flutter/foundation.dart'; // Added
 
 class TaskDetailsScreen extends ConsumerStatefulWidget {
   final String taskId;
 
-  const TaskDetailsScreen({Key? key, required this.taskId}) : super(key: key);
+  const TaskDetailsScreen({super.key, required this.taskId});
 
   @override
   ConsumerState<TaskDetailsScreen> createState() => _TaskDetailsScreenState();
@@ -25,7 +30,20 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
   bool _isSubmittingBid = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Track view analytics
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final supabase = ref.read(supabaseServiceProvider);
+      supabase.trackTaskView(widget.taskId);
+      supabase.updateRealtimeViewers(widget.taskId, 1);
+    });
+  }
+
+  @override
   void dispose() {
+    // Decrement realtime viewers
+    ref.read(supabaseServiceProvider).updateRealtimeViewers(widget.taskId, -1);
     _bidAmountController.dispose();
     _bidMessageController.dispose();
     super.dispose();
@@ -131,6 +149,11 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
+                      CountdownTimer(
+                        expiresAt: task.effectiveExpiresAt,
+                        textStyle: AppTheme.caption,
+                      ),
+                      const Spacer(),
                       Text(
                         _formatPostedTime(task.createdAt),
                         style: AppTheme.caption.copyWith(
@@ -152,7 +175,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.currency_rupee, color: AppTheme.boostGold),
+                        const Icon(Icons.currency_rupee, color: AppTheme.boostGold),
                         const SizedBox(width: 8),
                         Text(
                           '${task.budget} ${task.budgetType}',
@@ -212,6 +235,37 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
 
                   const SizedBox(height: 24),
 
+                  // ✨ Task Navigation Button (For assigned workers)
+                  if (currentUser?.id == task.workerId && 
+                      (task.status == 'assigned' || task.status == 'in_progress') &&
+                      task.pickupLat != null && task.pickupLng != null) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TaskNavigationScreen(
+                                taskLocation: LatLng(task.pickupLat!, task.pickupLng!),
+                                taskTitle: task.title,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.navigation, color: Colors.white),
+                        label: const Text('Navigate to Task'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.navyDark,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
                   // Bids Section
                   if (!isTaskOwner) ...[
                     Text(
@@ -259,7 +313,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.check_circle, color: AppTheme.likeGreen),
+                            const Icon(Icons.check_circle, color: AppTheme.likeGreen),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -299,7 +353,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                         alignment: Alignment.center,
                         child: Column(
                           children: [
-                            Icon(Icons.hourglass_empty, size: 48, color: AppTheme.grey400),
+                            const Icon(Icons.hourglass_empty, size: 48, color: AppTheme.grey400),
                             const SizedBox(height: 16),
                             Text(
                               'No bids yet',
@@ -422,7 +476,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                   backgroundColor: AppTheme.likeGreen.withOpacity(0.2),
                   child: Text(
                     bid.workerName.isNotEmpty ? bid.workerName[0].toUpperCase() : 'W',
-                    style: TextStyle(color: AppTheme.likeGreen),
+                    style: const TextStyle(color: AppTheme.likeGreen),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -561,9 +615,9 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                   child: OutlinedButton(
                     onPressed: () => _rejectBid(bid),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: AppTheme.nopeRed),
+                      side: const BorderSide(color: AppTheme.nopeRed),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Reject',
                       style: TextStyle(color: AppTheme.nopeRed),
                     ),
@@ -582,6 +636,17 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a bid amount'),
+          backgroundColor: AppTheme.nopeRed,
+        ),
+      );
+      return;
+    }
+
+    // --- Content Safety Check ---
+    if (!ContentFilter.isSafe(_bidMessageController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your message contains prohibited words.'),
           backgroundColor: AppTheme.nopeRed,
         ),
       );
@@ -635,7 +700,7 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
         );
         // Navigate to chat if catch success
         if (matchId != null) {
-          context.go('/matches/$matchId/chat');
+          context.go('/matches/$matchId/chat?autofocus=true');
         } else {
           context.go('/matches'); // Fallback to list
         }

@@ -6,7 +6,7 @@ import '../../data_types/notification.dart';
 import '../../managers/notifications_provider.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({Key? key}) : super(key: key);
+  const NotificationsScreen({super.key});
 
   @override
   ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -464,7 +464,7 @@ enum NotificationFilter {
 }
 
 class NotificationSettingsSheet extends StatefulWidget {
-  const NotificationSettingsSheet({Key? key}) : super(key: key);
+  const NotificationSettingsSheet({super.key});
 
   @override
   State<NotificationSettingsSheet> createState() => _NotificationSettingsSheetState();
@@ -578,7 +578,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppTheme.superLikeBlue,
+            activeThumbColor: AppTheme.superLikeBlue,
           ),
         ],
       ),

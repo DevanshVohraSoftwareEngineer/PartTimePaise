@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class CancellationRefundScreen extends StatelessWidget {
-  const CancellationRefundScreen({Key? key}) : super(key: key);
+  const CancellationRefundScreen({super.key});
 
   Widget _buildSection(String title, String content) {
     return Column(

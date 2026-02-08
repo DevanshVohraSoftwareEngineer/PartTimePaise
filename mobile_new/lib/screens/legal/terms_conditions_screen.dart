@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class TermsConditionsScreen extends StatelessWidget {
-  const TermsConditionsScreen({Key? key}) : super(key: key);
+  const TermsConditionsScreen({super.key});
 
   Widget _buildSection(String title, String content) {
     return Column(

@@ -5,6 +5,7 @@ import '../data_types/task_match.dart';
 import '../data_types/message.dart';
 import '../data_types/task.dart';
 import '../services/supabase_service.dart';
+import '../helpers/content_filter.dart';
 import 'auth_provider.dart';
 
 // Matches state
@@ -38,14 +39,43 @@ class MatchesState {
 
 class MatchesNotifier extends StateNotifier<MatchesState> {
   final SupabaseService _supabaseService;
+  final String? _userId;
+  Timer? _expiryTimer;
 
-  MatchesNotifier(this._supabaseService) : super(const MatchesState()) {
+  MatchesNotifier(this._supabaseService, this._userId) : super(const MatchesState()) {
     _initializeRealtimeListeners();
+    _startExpiryTimer();
+  }
+
+  void _startExpiryTimer() {
+    _expiryTimer?.cancel();
+    _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (state.candidates.isEmpty) return;
+      
+      final now = DateTime.now();
+      final validCandidates = state.candidates.where((c) {
+        final createdAt = DateTime.parse(c['created_at']);
+        final expiry = createdAt.add(const Duration(minutes: 60));
+        return expiry.isAfter(now);
+      }).toList();
+
+      if (validCandidates.length != state.candidates.length) {
+        state = state.copyWith(candidates: validCandidates);
+      } else {
+        // Trigger a state update to refresh timers in UI
+        state = state.copyWith(candidates: [...state.candidates]);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
   }
 
   void _initializeRealtimeListeners() {
-    final userId = _supabaseService.currentUser?.id;
-    if (userId == null) return;
+    if (_userId == null) return;
 
     // 1. Matches Stream
     _supabaseService.getMatchesStream().listen((data) async {
@@ -54,7 +84,20 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
 
     // 2. Candidates Stream
     _supabaseService.getIncomingSwipesStream().listen((swipesData) async {
-       await _fetchCandidates(swipesData, userId);
+       await _fetchCandidates(swipesData, _userId!);
+    });
+
+    // 3. Task Status Stream (To sync "Permanent Actions" like Lock Deal)
+    _supabaseService.getTasksStream().listen((data) {
+       // When any task changes, re-fetch matches to pick up status changes
+       _fetchMatches(state.matches.map((m) => {
+         'id': m.id,
+         'task_id': m.taskId,
+         'worker_id': m.workerId,
+         'client_id': m.clientId,
+         'status': m.status,
+         'matched_at': m.matchedAt.toIso8601String(),
+       }).toList());
     });
   }
 
@@ -63,6 +106,13 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
     
     for (var json in data) {
       final matchId = json['id'].toString();
+      
+      // AUTO-EXPIRY: Skip matches that are older than 24 hours
+      final matchedAt = DateTime.parse(json['created_at'].toString());
+      if (DateTime.now().difference(matchedAt).inHours >= 24) {
+        continue; 
+      }
+
       try {
         final enrichedData = await _supabaseService.client
           .from('enriched_matches')
@@ -75,7 +125,7 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
         } else {
           // Fallback: Manually hydrate profile data if view fails
           final match = TaskMatch.fromJson(json);
-          final otherUserId = _supabaseService.currentUser?.id == match.clientId 
+          final otherUserId = _userId == match.clientId 
               ? match.workerId 
               : match.clientId;
               
@@ -116,11 +166,19 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
   Future<void> _fetchCandidates(List<Map<String, dynamic>> swipesData, String userId) async {
     final myTasksResponse = await _supabaseService.client
       .from('tasks')
-      .select('id, title')
+      .select('id, title, budget')
       .eq('client_id', userId);
       
     final myTaskIds = (myTasksResponse as List).map((t) => t['id'] as String).toSet();
-    final relevantSwipes = swipesData.where((s) => myTaskIds.contains(s['task_id'])).toList();
+    
+    // Get existing match worker IDs to filter them out of candidates
+    final existingMatchedWorkerIds = state.matches.map((m) => m.workerId).toSet();
+
+    final relevantSwipes = swipesData.where((s) => 
+      myTaskIds.contains(s['task_id']) && 
+      !existingMatchedWorkerIds.contains(s['user_id']) &&
+      s['direction'] == 'right'
+    ).toList();
     
     List<Map<String, dynamic>> enrichedCandidates = [];
     
@@ -139,6 +197,7 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
           'worker_id': swipe['user_id'],
           'task_id': swipe['task_id'],
           'task_title': task['title'] ?? 'Unknown Task',
+          'task_budget': task['budget'] ?? 0,
           'worker_name': profile['name'],
           'worker_avatar': profile['avatar_url'],
           'worker_rating': profile['rating'],
@@ -160,13 +219,13 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
 
       final matchId = await _supabaseService.createMatch(taskId, workerId);
       
-      if (matchId != null && candidate.isNotEmpty) {
+      if (candidate.isNotEmpty) {
         // Optimistically add to matches list if not already there via stream
         final optimisticMatch = TaskMatch(
           id: matchId,
           taskId: taskId,
           workerId: workerId,
-          clientId: _supabaseService.currentUser?.id ?? '',
+          clientId: _userId ?? '',
           status: 'active',
           matchedAt: DateTime.now(),
           workerName: candidate['worker_name'],
@@ -242,11 +301,55 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
   void addMatch(TaskMatch match) {
     state = state.copyWith(matches: [match, ...state.matches]);
   }
+
+  // ✨ Magic: Mock an incoming swipe for real-time testing
+  Future<void> mockIncomingSwipe() async {
+    if (_userId == null) return;
+    
+    // 1. Get one of my tasks
+    final tasks = await _supabaseService.client
+        .from('tasks')
+        .select('id')
+        .eq('client_id', _userId!)
+        .limit(1);
+        
+    if ((tasks as List).isEmpty) {
+      print('❌ Mock Swipe: No tasks found for user $_userId');
+      return;
+    }
+    
+    final taskId = tasks.first['id'];
+    
+    // 2. Create a dummy profile if needed, or use a fixed one
+    final dummyWorkerId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+    
+    try {
+      await _supabaseService.client.from('profiles').upsert({
+        'id': dummyWorkerId,
+        'name': 'Match Tester 🔥',
+        'avatar_url': 'https://i.pravatar.cc/150?u=$dummyWorkerId',
+        'college': 'Testing Uni',
+        'verified': true,
+      });
+      
+      // 3. Insert the swipe
+      await _supabaseService.client.from('swipes').upsert({
+        'task_id': taskId,
+        'user_id': dummyWorkerId,
+        'direction': 'right',
+      });
+      
+      print('✅ Mock Swipe Inserted into DB for real-time test!');
+    } catch (e) {
+      print('❌ Mock Swipe Error: $e');
+    }
+  }
 }
 
 final matchesProvider = StateNotifierProvider<MatchesNotifier, MatchesState>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
-  return MatchesNotifier(supabaseService);
+  final user = ref.watch(currentUserProvider);
+  return MatchesNotifier(supabaseService, user?.id);
 });
 
 // Chat state for a specific match
@@ -291,6 +394,7 @@ class ChatState {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final String matchId;
+  final String? _userId;
   final SupabaseService _supabaseService;
   StreamSubscription<List<Map<String, dynamic>>>? _messagesSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _onlineStatusSubscription;
@@ -299,6 +403,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   ChatNotifier(
     this.matchId,
+    this._userId,
     this._supabaseService,
   ) : super(ChatState(matchId: matchId)) {
     _init();
@@ -308,10 +413,38 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _setupRealtimeListeners();
   }
 
-  void _setupRealtimeListeners() {
+  void _setupRealtimeListeners() async {
+    // Get match creation time for message filtering
+    DateTime? matchCreatedAt;
+    try {
+      final matchRes = await _supabaseService.client
+          .from('matches')
+          .select('created_at')
+          .eq('id', matchId)
+          .maybeSingle();
+      if (matchRes != null) {
+        matchCreatedAt = DateTime.parse(matchRes['created_at']);
+      }
+    } catch (e) {
+      print('Error fetching match creation time: $e');
+    }
+
     // Listen for real-time message updates
     _messagesSubscription = _supabaseService.getMessagesStream(matchId).listen((data) {
-      final messages = data.map((json) => Message.fromJson(json)).toList();
+      var messages = data.map((json) => Message.fromJson(json)).toList();
+      
+      // ✨ AUTO-EXPIRY: Filter out messages if they are part of an expired chat
+      // Actually, if we want to show messages that haven't expired yet relative to their OWN send time, we'd check message.timestamp.
+      // But the requirement says "removed after 24 hours ... from the time after match".
+      // This means if matchCreatedAt is more than 24h ago, hide EVERYTHING.
+      if (matchCreatedAt != null) {
+        final now = DateTime.now();
+        final expiryTime = matchCreatedAt.add(const Duration(hours: 24));
+        if (now.isAfter(expiryTime)) {
+          messages = []; // Chat has expired, clear messages
+        }
+      }
+
       state = state.copyWith(messages: messages, isLoading: false);
     }, onError: (error) {
       state = state.copyWith(error: error.toString(), isLoading: false);
@@ -328,11 +461,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _typingChannel!.onBroadcast(
       event: 'typing',
       callback: (payload) {
-        final userId = payload['userId'];
+        final payloadUserId = payload['userId'];
         final isTyping = payload['isTyping'] as bool;
         
         // If it's the other user, update state
-        if (userId != _supabaseService.currentUser?.id) {
+        if (payloadUserId != _userId) {
           state = state.copyWith(isTyping: isTyping);
         }
       },
@@ -340,7 +473,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   void _setupOnlineStatusListener() async {
-    final currentUserId = _supabaseService.currentUser?.id;
+    final currentUserId = _userId;
     if (currentUserId == null) return;
 
     // Get match to find other user ID
@@ -371,7 +504,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _setupPresenceListener() {
     // Snapchat Style Chat Presence
-    final currentUserId = _supabaseService.currentUser?.id;
+    final currentUserId = _userId;
     if (currentUserId != null) {
       _presenceChannel = _supabaseService.getChatPresenceChannel(matchId);
       _presenceChannel!.onPresenceSync((_) {
@@ -405,8 +538,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> sendMessage(String content, {String type = 'text'}) async {
-    final userId = _supabaseService.currentUser?.id;
+    final userId = _userId;
     if (userId == null) return;
+
+    // Content Safety Check
+    if (type == 'text' && !ContentFilter.isSafe(content)) {
+      state = state.copyWith(error: 'Message contains prohibited content');
+      return;
+    }
 
     // Optimistic UI update
     final optimisticMessage = Message(
@@ -418,6 +557,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       timestamp: DateTime.now(),
       type: type,
     );
+
     
     final previousMessages = state.messages;
     state = state.copyWith(messages: [...previousMessages, optimisticMessage]);
@@ -449,5 +589,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
 final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, String>((ref, matchId) {
   final supabaseService = ref.watch(supabaseServiceProvider);
-  return ChatNotifier(matchId, supabaseService);
+  final user = ref.watch(currentUserProvider);
+  return ChatNotifier(matchId, user?.id, supabaseService);
 });

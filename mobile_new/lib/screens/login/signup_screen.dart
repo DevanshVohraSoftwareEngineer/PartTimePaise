@@ -2,17 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:confetti/confetti.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../managers/auth_provider.dart';
 import '../../utils/validators.dart';
-import '../../managers/theme_settings_provider.dart';
-import '../../widgets/futuristic_background.dart';
-import '../../utils/haptics.dart';
+import '../../helpers/content_filter.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
-  const SignupScreen({Key? key}) : super(key: key);
+  const SignupScreen({super.key});
 
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
@@ -47,6 +44,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Future<void> _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!ContentFilter.isSafe(_nameController.text) || 
+        !ContentFilter.isSafe(_collegeController.text)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('⚠️ Prohibited Language', style: TextStyle(color: AppTheme.nopeRed, fontWeight: FontWeight.bold)),
+          content: const Text(
+            'Your name or college details contain words that are not allowed on this platform.\n\n'
+            'Please use professional language to continue.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('EDIT DETAILS'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     try {
       await ref.read(authProvider.notifier).register(
             email: _emailController.text.trim(),
@@ -59,14 +78,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           );
       
       if (mounted) {
-        // ✨ Magic: Celebrate the signup!
         _confettiController.play();
-        
-        // Brief delay for user to see the "magic"
         await Future.delayed(const Duration(seconds: 2));
-        
         if (mounted) {
-          context.go('/kyc-verification');
+          context.go('/swipe');
         }
       }
     } catch (e) {
@@ -82,250 +97,181 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isLoading = authState.isLoading;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              ref.read(themeSettingsProvider.notifier).toggleTheme();
-              AppHaptics.light();
-            },
-            icon: Icon(
-              ref.watch(themeSettingsProvider).backgroundTheme == BackgroundTheme.thunder 
-                  ? Icons.bolt 
-                  : Icons.attach_money,
-              color: AppTheme.boostGold,
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
+        backgroundColor: Colors.white,
+        elevation: 0,
       ),
-      body: FuturisticBackground(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
+      body: Stack(
+        children: [
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Title
-                    Text(
+                    const SizedBox(height: 20),
+                    const Text(
                       'Create Account',
-                  style: AppTheme.heading1.copyWith(
-                    color: AppTheme.navyDark,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 8),
-                
-                Text(
-                  'Join PartTimePaise today',
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.grey700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 40),
-                
-                // Role selection
-                Padding(
-                  padding: const EdgeInsets.only(left: 4.0),
-                  child: Text(
-                    'I am a:',
-                    style: AppTheme.heading3,
-                  ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Wrap in a ScrollView or ensure constrained for small screens
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.43,
-                        child: RadioListTile<String>(
-                          title: const Text('Worker', style: TextStyle(fontSize: 14)),
-                          subtitle: const Text('Find tasks', style: TextStyle(fontSize: 11)),
-                          value: AppConstants.roleWorker,
-                          groupValue: _selectedRole,
-                          contentPadding: EdgeInsets.zero,
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedRole = value!;
-                            });
-                          },
-                        ),
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1,
+                        color: Colors.black,
                       ),
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.43,
-                        child: RadioListTile<String>(
-                          title: const Text('Client', style: TextStyle(fontSize: 14)),
-                          subtitle: const Text('Post tasks', style: TextStyle(fontSize: 11)),
-                          value: AppConstants.roleClient,
-                          groupValue: _selectedRole,
-                          contentPadding: EdgeInsets.zero,
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedRole = value!;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 8),
-                
-                Text(
-                  'Note: You can post tasks and find opportunities regardless of your selection',
-                  style: AppTheme.caption.copyWith(
-                    color: AppTheme.grey500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 24),
-                
-                // Name field
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    prefixIcon: Icon(Icons.person_outlined),
-                  ),
-                  validator: Validators.validateName,
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Email field
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: Validators.validateEmail,
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // College field (optional)
-                TextFormField(
-                  controller: _collegeController,
-                  decoration: const InputDecoration(
-                    labelText: 'College (Optional)',
-                    prefixIcon: Icon(Icons.school_outlined),
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Password field
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
                     ),
-                  ),
-                  validator: Validators.validatePassword,
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // Sign up button
-                ElevatedButton(
-                  onPressed: isLoading ? null : _handleSignup,
-                  child: isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Sign Up'),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                const SizedBox(height: 16),
-                
-                // Login link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                    const SizedBox(height: 8),
                     Text(
-                      'Already have an account? ',
-                      style: AppTheme.bodyMedium,
+                      'Join the campus marketplace',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.black.withOpacity(0.5),
+                      ),
                     ),
-                    TextButton(
-                      onPressed: () => context.pop(),
-                      child: const Text('Login'),
+                    const SizedBox(height: 48),
+
+                    // Clean Role Selection
+                    Row(
+                      children: [
+                        _buildRoleButton('Worker', AppConstants.roleWorker),
+                        const SizedBox(width: 12),
+                        _buildRoleButton('Client', AppConstants.roleClient),
+                      ],
                     ),
+                    const SizedBox(height: 32),
+
+                    // Name
+                    _buildTextField(_nameController, 'Full Name', Icons.person_outlined, Validators.validateName),
+                    const SizedBox(height: 16),
+
+                    // Email
+                    _buildTextField(_emailController, 'Email', Icons.email_outlined, Validators.validateEmail, TextInputType.emailAddress),
+                    const SizedBox(height: 16),
+
+                    // College
+                    _buildTextField(_collegeController, 'College (Optional)', Icons.school_outlined, null),
+                    const SizedBox(height: 16),
+
+                    // Password
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        hintText: 'Password',
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      validator: Validators.validatePassword,
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    ElevatedButton(
+                      onPressed: isLoading ? null : _handleSignup,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: isLoading 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Already have an account? ', style: TextStyle(color: Colors.black54)),
+                        TextButton(
+                          onPressed: () => context.pop(),
+                          child: const Text('Login', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
                   ],
                 ),
-
-                ],
               ),
             ),
           ),
-        ),
-          
-          // ✨ Magic Confetti
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
               confettiController: _confettiController,
               blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              colors: const [
-                AppTheme.navyMedium,
-                Colors.orange,
-                Colors.green,
-                Colors.blue,
-              ],
+              colors: const [Colors.black, Colors.grey],
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildRoleButton(String label, String role) {
+    bool isSelected = _selectedRole == role;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedRole = role),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.black : Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, String? Function(String?)? validator, [TextInputType? type]) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: type,
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: Colors.grey[100],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      validator: validator,
+    );
+  }
 }

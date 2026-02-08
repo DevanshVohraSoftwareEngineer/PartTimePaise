@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import '../data_types/notification.dart';
 import '../services/supabase_service.dart';

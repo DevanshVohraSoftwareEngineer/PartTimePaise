@@ -57,7 +57,7 @@
 				<key>CFBundleTypeRole</key>
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
-				<string>com.parttimepaise.mobile_new</string>
+				<string>com.parttimepaise.mobileNew</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>parttimepaise</string>

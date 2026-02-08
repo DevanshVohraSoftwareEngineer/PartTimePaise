@@ -10,7 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../data_types/task.dart';
 
 class MyTasksScreen extends ConsumerStatefulWidget {
-  const MyTasksScreen({Key? key}) : super(key: key);
+  const MyTasksScreen({super.key});
 
   @override
   ConsumerState<MyTasksScreen> createState() => _MyTasksScreenState();
@@ -47,7 +47,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
           // Re-trigger stream or just wait for realtime
           ref.invalidate(appliedTasksProvider);
         },
-        child: appliedTasksState.isLoading
+        child: (appliedTasksState.isLoading && appliedTasksState.tasks.isEmpty)
             ? const Center(child: CircularProgressIndicator())
             : appliedTasksState.tasks.isEmpty
                 ? SingleChildScrollView(
@@ -71,8 +71,9 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
         onPressed: () {
           context.push('/post-task');
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Post Task'),
+        icon: Icon(Icons.add, color: isDark ? Colors.black : Colors.white),
+        label: Text('Post Task', style: TextStyle(color: isDark ? Colors.black : Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        backgroundColor: Theme.of(context).primaryColor,
       ),
     );
   }
@@ -89,23 +90,24 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
         : null;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        color: isDark ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          color: isDark ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.1),
         ),
       ),
       child: Column(
@@ -134,7 +136,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
-                            color: isDark ? Colors.white : AppTheme.navyDark,
+                            color: primaryColor,
                             letterSpacing: -0.2,
                           ),
                           maxLines: 1,
@@ -144,8 +146,8 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
                           children: [
                             if (distanceKm != null) ...[
                               Text(
-                                '${distanceKm.toStringAsFixed(1)} km away',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                '${distanceKm.toStringAsFixed(1)} km',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.withOpacity(0.8)),
                               ),
                               const SizedBox(width: 8),
                             ],
@@ -153,13 +155,14 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: _getStatusColor(task.status).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: _getStatusColor(task.status).withOpacity(0.3), width: 0.5),
                               ),
                               child: Text(
                                 task.status.toUpperCase(),
                                 style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
                                   color: _getStatusColor(task.status),
                                 ),
                               ),
@@ -175,13 +178,13 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : AppTheme.navyDark,
+                      color: primaryColor,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Icon(
                     isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: Colors.grey,
+                    color: primaryColor.withOpacity(0.3),
                   ),
                 ],
               ),
@@ -284,61 +287,6 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
     );
   }
 
-  Widget _buildBottomNav() {
-    return BottomNavigationBar(
-      currentIndex: 4,
-      type: BottomNavigationBarType.fixed,
-      onTap: (index) {
-        switch (index) {
-          case 0:
-            context.go('/swipe');
-            break;
-          case 1:
-            context.go('/matches');
-            break;
-          case 2:
-            context.go('/post-task');
-            break;
-          case 3:
-            context.go('/posted-tasks');
-            break;
-          case 4:
-            // Already on my-tasks screen
-            break;
-          case 5:
-            context.go('/profile');
-            break;
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.explore),
-          label: 'Explore',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.favorite),
-          label: 'Matches',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.add_circle),
-          label: 'Post Task',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.assignment),
-          label: 'Posted Tasks',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.work),
-          label: 'My Tasks',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
-    );
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -372,6 +320,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
       case 'open':
         return AppTheme.superLikeBlue;
       case 'matched':
+      case 'assigned':
         return AppTheme.likeGreen;
       case 'in_progress':
         return AppTheme.boostGold;

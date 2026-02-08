@@ -127,11 +127,11 @@ class _FuturisticBackgroundState extends ConsumerState<FuturisticBackground> wit
               end: Alignment.bottomRight,
               colors: theme == BackgroundTheme.thunder
                 ? (isDark 
-                    ? [const Color(0xFF000B1A), const Color(0xFF001F3F), const Color(0xFF000B1A)]
-                    : [const Color(0xFFE1F5FE), const Color(0xFFB3E5FC), const Color(0xFFE1F5FE)])
+                    ? [Colors.black, Colors.black, Colors.black] 
+                    : [Colors.white, Colors.white, Colors.white]) 
                 : (isDark
-                    ? [const Color(0xFF0B1A00), const Color(0xFF1F3F00), const Color(0xFF0B1A00)]
-                    : [const Color(0xFFF1FCE1), const Color(0xFFE5FCB3), const Color(0xFFF1FCE1)]),
+                    ? [Colors.black, Colors.black, Colors.black]
+                    : [Colors.white, Colors.white, Colors.white]),
             ),
           ),
         ),
@@ -147,8 +147,8 @@ class _FuturisticBackgroundState extends ConsumerState<FuturisticBackground> wit
         IgnorePointer(
           child: CustomPaint(
             painter: theme == BackgroundTheme.thunder 
-                ? ProperLightningPainter(_bolts) 
-                : CashShowerPainter(_cashTokens),
+                ? ProperLightningPainter(_bolts, isDark: isDark) 
+                : CashShowerPainter(_cashTokens, isDark: isDark),
             size: Size.infinite,
           ),
         ),
@@ -158,7 +158,7 @@ class _FuturisticBackgroundState extends ConsumerState<FuturisticBackground> wit
           child: Container(
             color: isDark 
                 ? Colors.black.withOpacity(0.4) 
-                : Colors.white.withOpacity(0.1),
+                : Colors.transparent,
           ),
         ),
 
@@ -190,8 +190,9 @@ class CashToken {
 
 class CashShowerPainter extends CustomPainter {
   final List<CashToken> tokens;
+  final bool isDark;
 
-  CashShowerPainter(this.tokens);
+  CashShowerPainter(this.tokens, {required this.isDark});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -200,9 +201,10 @@ class CashShowerPainter extends CustomPainter {
         text: TextSpan(
           text: token.symbol,
           style: TextStyle(
-            color: Colors.green.withOpacity(0.4),
+            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.12),
             fontSize: token.size,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -234,21 +236,23 @@ class Bolt {
 
 class ProperLightningPainter extends CustomPainter {
   final List<Bolt> bolts;
+  final bool isDark;
 
-  ProperLightningPainter(this.bolts);
+  ProperLightningPainter(this.bolts, {required this.isDark});
 
   @override
   void paint(Canvas canvas, Size size) {
     for (var bolt in bolts) {
       final alpha = (1.0 - bolt.age).clamp(0.0, 1.0);
+      final color = isDark ? Colors.white : Colors.black;
       
       final paint = Paint()
-        ..color = Color.fromRGBO(255, 255, 255, alpha * 0.8)
+        ..color = color.withOpacity(alpha * 0.8)
         ..strokeWidth = 2.0
         ..style = PaintingStyle.stroke;
 
       final glowPaint = Paint()
-        ..color = Color.fromRGBO(0, 255, 255, alpha * 0.3)
+        ..color = color.withOpacity(alpha * 0.2)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
         ..strokeWidth = 6.0;
 

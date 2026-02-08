@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../utils/validators.dart';
+import '../../managers/auth_provider.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
-  const ForgotPasswordScreen({Key? key}) : super(key: key);
+  const ForgotPasswordScreen({super.key});
 
   @override
   ConsumerState<ForgotPasswordScreen> createState() =>
@@ -32,22 +33,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     });
 
     try {
-      // Supabase forgot password logic can be added here later if needed
-      
-      // For now, show success message
-      setState(() {
-        _emailSent = true;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      await ref.read(authProvider.notifier).resetPassword(_emailController.text.trim());
       
       if (mounted) {
+        setState(() {
+          _emailSent = true;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(e.toString().replaceAll('Exception: ', '')),
             backgroundColor: AppTheme.nopeRed,
           ),
         );
@@ -74,6 +76,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Widget _buildFormView() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Form(
       key: _formKey,
       child: Column(
@@ -86,13 +90,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppTheme.navyLightest,
+              color: isDark ? AppTheme.luxeDarkGrey : AppTheme.luxeLightGrey,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.lock_reset,
               size: 40,
-              color: AppTheme.navyMedium,
+              color: isDark ? Colors.white : Colors.black,
             ),
           ),
           
@@ -101,8 +105,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           // Title
           Text(
             'Forgot Password?',
-            style: AppTheme.heading1.copyWith(
-              color: AppTheme.navyDark,
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+              color: isDark ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1,
             ),
             textAlign: TextAlign.center,
           ),
@@ -111,8 +117,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           
           Text(
             'Enter your email address and we\'ll send you a link to reset your password.',
-            style: AppTheme.bodyLarge.copyWith(
-              color: AppTheme.grey700,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.grey[600],
             ),
             textAlign: TextAlign.center,
           ),
@@ -177,7 +183,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         Text(
           'Check Your Email',
           style: AppTheme.heading1.copyWith(
-            color: AppTheme.navyDark,
+            color: Theme.of(context).primaryColor,
           ),
           textAlign: TextAlign.center,
         ),
@@ -187,7 +193,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         Text(
           'We\'ve sent a password reset link to ${_emailController.text}',
           style: AppTheme.bodyLarge.copyWith(
-            color: AppTheme.grey700,
+            color: Theme.of(context).primaryColor.withOpacity(0.6),
           ),
           textAlign: TextAlign.center,
         ),

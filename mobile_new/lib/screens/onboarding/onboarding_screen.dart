@@ -8,7 +8,7 @@ import '../../widgets/futuristic_background.dart';
 import '../../utils/haptics.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({Key? key}) : super(key: key);
+  const OnboardingScreen({super.key});
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -19,25 +19,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _currentPage = 0;
 
   final List<OnboardingPage> _pages = [
-    OnboardingPage(
+    const OnboardingPage(
       title: 'Welcome to PartTimePaise',
       subtitle: 'Connect with local opportunities and earn money doing what you love',
       image: 'assets/images/onboarding_1.png',
       color: AppTheme.superLikeBlue,
     ),
-    OnboardingPage(
+    const OnboardingPage(
       title: 'Find Perfect Tasks',
       subtitle: 'Browse through verified tasks that match your skills and schedule',
       image: 'assets/images/onboarding_2.png',
       color: AppTheme.likeGreen,
     ),
-    OnboardingPage(
+    const OnboardingPage(
       title: 'Bid & Get Hired',
       subtitle: 'Submit competitive bids and get hired for tasks that excite you',
       image: 'assets/images/onboarding_3.png',
       color: AppTheme.boostGold,
     ),
-    OnboardingPage(
+    const OnboardingPage(
       title: 'Safe Payments',
       subtitle: 'Secure payments with escrow protection and easy withdrawals',
       image: 'assets/images/onboarding_4.png',
@@ -159,13 +159,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Widget _buildPage(OnboardingPage page) {
     return Container(
-      color: Colors.transparent,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      color: page.color,
+      child: Stack(
+        children: [
+          // Background decoration
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.1),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
               // Image placeholder (you can replace with actual images)
               Container(
                 width: 280,
@@ -204,6 +219,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ],
           ),
         ),
+      ),
+        ],
       ),
     );
   }
@@ -288,7 +305,7 @@ class OnboardingPage {
 }
 
 class UserTypeSelectionSheet extends ConsumerStatefulWidget {
-  const UserTypeSelectionSheet({Key? key}) : super(key: key);
+  const UserTypeSelectionSheet({super.key});
 
   @override
   ConsumerState<UserTypeSelectionSheet> createState() => _UserTypeSelectionSheetState();
@@ -459,7 +476,7 @@ class _UserTypeSelectionSheetState extends ConsumerState<UserTypeSelectionSheet>
 
 // Worker Profile Setup Screen
 class WorkerProfileSetupScreen extends ConsumerStatefulWidget {
-  const WorkerProfileSetupScreen({Key? key}) : super(key: key);
+  const WorkerProfileSetupScreen({super.key});
 
   @override
   ConsumerState<WorkerProfileSetupScreen> createState() => _WorkerProfileSetupScreenState();
@@ -471,7 +488,7 @@ class _WorkerProfileSetupScreenState extends ConsumerState<WorkerProfileSetupScr
   final _experienceController = TextEditingController();
   final _hourlyRateController = TextEditingController();
 
-  List<String> _selectedSkills = [];
+  final List<String> _selectedSkills = [];
   String _experienceLevel = 'Beginner';
 
   final List<String> _availableSkills = [
@@ -568,7 +585,7 @@ class _WorkerProfileSetupScreenState extends ConsumerState<WorkerProfileSetupScr
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
-                value: _experienceLevel,
+                initialValue: _experienceLevel,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                 ),
@@ -675,7 +692,7 @@ class _WorkerProfileSetupScreenState extends ConsumerState<WorkerProfileSetupScr
 
 // Client Profile Setup Screen (simplified)
 class ClientProfileSetupScreen extends ConsumerWidget {
-  const ClientProfileSetupScreen({Key? key}) : super(key: key);
+  const ClientProfileSetupScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -689,7 +706,7 @@ class ClientProfileSetupScreen extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.business_center,
               size: 80,
               color: AppTheme.superLikeBlue,

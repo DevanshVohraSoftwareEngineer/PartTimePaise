@@ -6,10 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
 import '../../managers/tasks_provider.dart';
-import '../../utils/validators.dart';
+import '../../helpers/content_filter.dart';
 
 class PostTaskScreen extends ConsumerStatefulWidget {
-  const PostTaskScreen({Key? key}) : super(key: key);
+  const PostTaskScreen({super.key});
 
   @override
   ConsumerState<PostTaskScreen> createState() => _PostTaskScreenState();
@@ -91,6 +91,29 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
       return;
     }
 
+    // --- Content Safety Check ---
+    if (!ContentFilter.isSafe(_titleController.text) || 
+        !ContentFilter.isSafe(_descriptionController.text)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('⚠️ Prohibited Content Detected', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          content: const Text(
+            'Your task title or description contains prohibited language (sexual, abusive, or illegal words).\n\n'
+            'Please remove these words to post your task. We maintain a safe environment for all users.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('EDIT TASK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     try {
       // ✨ Magic: Capture GPS for Proximity Dispatch
       Position? position;
@@ -141,28 +164,61 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
     }
   }
 
+  final Map<String, IconData> _categoryIcons = {
+    'General Help': Icons.volunteer_activism,
+    'Delivery': Icons.directions_bike,
+    'Cleaning': Icons.cleaning_services,
+    'Tutoring': Icons.menu_book,
+    'Tech Support': Icons.computer,
+    'Moving': Icons.local_shipping,
+    'Shopping': Icons.shopping_cart,
+    'Pet Care': Icons.pets,
+    'Gardening': Icons.yard,
+    'Event Help': Icons.celebration,
+    'Other': Icons.more_horiz,
+  };
+
   Widget _buildCategoryChips() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 12,
+      runSpacing: 12,
       children: _categories.map((category) {
         final isSelected = category == _selectedCategory;
-        return FilterChip(
-          label: Text(category),
-          selected: isSelected,
-          onSelected: (selected) {
-            if (selected) {
-              setState(() {
-                _selectedCategory = category;
-              });
-            }
-          },
-          backgroundColor: AppTheme.grey100,
-          selectedColor: AppTheme.likeGreen.withOpacity(0.2),
-          checkmarkColor: AppTheme.likeGreen,
-          labelStyle: TextStyle(
-            color: isSelected ? AppTheme.likeGreen : AppTheme.grey700,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        return GestureDetector(
+          onTap: () => setState(() => _selectedCategory = category),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.electricMedium : AppTheme.grey100,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: isSelected ? [
+                BoxShadow(
+                  color: AppTheme.electricMedium.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ] : [],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _categoryIcons[category] ?? Icons.help,
+                  size: 18,
+                  color: isSelected ? Colors.white : AppTheme.grey700,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  category,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : AppTheme.grey700,
+                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }).toList(),
@@ -188,6 +244,9 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
   }
 
   Widget _buildUrgencyChips() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -204,12 +263,12 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
               });
             }
           },
-          backgroundColor: AppTheme.grey100,
-          selectedColor: AppTheme.likeGreen.withOpacity(0.2),
-          checkmarkColor: AppTheme.likeGreen,
+          backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+          selectedColor: primaryColor.withOpacity(0.1),
+          checkmarkColor: primaryColor,
           labelStyle: TextStyle(
-            color: isSelected ? AppTheme.likeGreen : AppTheme.grey700,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? primaryColor : (isDark ? Colors.white70 : Colors.black54),
+            fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
           ),
         );
       }).toList(),
@@ -217,6 +276,9 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
   }
 
   Widget _buildBudgetTypeChips() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Row(
       children: _budgetTypes.map((type) {
         final isSelected = type == _budgetType;
@@ -233,12 +295,12 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
                   });
                 }
               },
-              backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : AppTheme.grey100,
-              selectedColor: AppTheme.likeGreen.withOpacity(0.2),
-              checkmarkColor: AppTheme.likeGreen,
+              backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+              selectedColor: primaryColor.withOpacity(0.1),
+              checkmarkColor: primaryColor,
               labelStyle: TextStyle(
-                color: isSelected ? AppTheme.likeGreen : AppTheme.grey700,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primaryColor : (isDark ? Colors.white70 : Colors.black54),
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
               ),
             ),
           ),
@@ -248,14 +310,18 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
   }
 
   Widget _buildTaskPreviewCard() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : Colors.white,
+        color: isDark ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: primaryColor.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -268,7 +334,7 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: AppTheme.likeGreen.withOpacity(0.1),
+              color: primaryColor.withOpacity(0.05),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -280,34 +346,33 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.likeGreen,
-                    borderRadius: BorderRadius.circular(12),
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     _selectedCategory,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                    style: TextStyle(
+                      color: isDark ? Colors.black : Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _urgency == 'ASAP (Today)' ? Colors.red.withOpacity(0.2) :
-                           _urgency == 'This Week' ? Colors.orange.withOpacity(0.2) :
-                           AppTheme.grey200,
-                    borderRadius: BorderRadius.circular(12),
+                    color: _urgency.startsWith('ASAP') ? Colors.red.withOpacity(0.1) : primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _urgency.startsWith('ASAP') ? Colors.red.withOpacity(0.3) : primaryColor.withOpacity(0.3)),
                   ),
                   child: Text(
                     _urgency,
                     style: TextStyle(
-                      color: _urgency == 'ASAP (Today)' ? Colors.red :
-                             _urgency == 'This Week' ? Colors.orange :
-                             AppTheme.grey700,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      color: _urgency.startsWith('ASAP') ? Colors.red : primaryColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
@@ -323,14 +388,14 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
               children: [
                 Text(
                   _titleController.text.isEmpty ? 'Your task title will appear here' : _titleController.text,
-                  style: AppTheme.heading2,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: primaryColor),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _descriptionController.text.isEmpty ? 'Your task description will appear here...' : _descriptionController.text,
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.getAdaptiveGrey700(context)),
+                  style: TextStyle(color: primaryColor.withOpacity(0.6), fontSize: 13),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -339,32 +404,33 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
                 // Budget and location
                 Row(
                   children: [
-                    Icon(Icons.currency_rupee, size: 16, color: AppTheme.likeGreen),
+                    Icon(Icons.currency_rupee, size: 16, color: primaryColor),
                     const SizedBox(width: 4),
                     Text(
                       _budgetController.text.isEmpty ? '₹0' : '₹${_budgetController.text}',
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: AppTheme.likeGreen,
-                        fontWeight: FontWeight.bold,
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '(${_budgetType.toLowerCase()})',
-                      style: AppTheme.caption.copyWith(color: AppTheme.grey500),
+                      style: TextStyle(color: primaryColor.withOpacity(0.4), fontSize: 11),
                     ),
                     const Spacer(),
                     Icon(
                       _remoteWork ? Icons.computer : Icons.location_on,
                       size: 16,
-                      color: AppTheme.grey500
+                      color: primaryColor.withOpacity(0.4)
                     ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         _remoteWork ? 'Remote work' :
                         _locationController.text.isEmpty ? 'Location not set' : _locationController.text,
-                        style: AppTheme.caption.copyWith(color: AppTheme.grey500),
+                        style: TextStyle(color: primaryColor.withOpacity(0.4), fontSize: 11),
                         textAlign: TextAlign.right,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -375,7 +441,7 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
 
                 if (_selectedImages.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Container(
+                  SizedBox(
                     height: 60,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -591,7 +657,7 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.photo_camera, size: 48, color: AppTheme.grey400),
+                          const Icon(Icons.photo_camera, size: 48, color: AppTheme.grey400),
                           const SizedBox(height: 8),
                           Text(
                             'No photos added yet',
@@ -601,7 +667,7 @@ class _PostTaskScreenState extends ConsumerState<PostTaskScreen> {
                       ),
                     ),
                   ] else ...[
-                    Container(
+                    SizedBox(
                       height: 120,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,

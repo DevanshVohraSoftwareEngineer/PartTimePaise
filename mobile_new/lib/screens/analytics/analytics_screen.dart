@@ -4,7 +4,7 @@ import '../../config/theme.dart';
 import '../../managers/auth_provider.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
-  const AnalyticsScreen({Key? key}) : super(key: key);
+  const AnalyticsScreen({super.key});
 
   @override
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
@@ -197,7 +197,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
+              const LinearProgressIndicator(
                 value: 0.4,
                 backgroundColor: AppTheme.grey300,
                 valueColor: AlwaysStoppedAnimation<Color>(AppTheme.superLikeBlue),
@@ -211,7 +211,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
+              const LinearProgressIndicator(
                 value: 0.27,
                 backgroundColor: AppTheme.grey300,
                 valueColor: AlwaysStoppedAnimation<Color>(AppTheme.likeGreen),
@@ -284,7 +284,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
+              const LinearProgressIndicator(
                 value: 0.83,
                 backgroundColor: AppTheme.grey300,
                 valueColor: AlwaysStoppedAnimation<Color>(AppTheme.likeGreen),
@@ -430,7 +430,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.show_chart, size: 48, color: AppTheme.grey400),
+          const Icon(Icons.show_chart, size: 48, color: AppTheme.grey400),
           const SizedBox(height: 16),
           Text(
             'Activity Chart',
@@ -462,7 +462,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.lightbulb,
               color: AppTheme.superLikeBlue,
               size: 24,

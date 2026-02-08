@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:ui'; // Added for ImageFilter
+// Added for ImageFilter
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../data_types/task.dart';
@@ -15,10 +15,10 @@ class SwipeCard extends StatefulWidget {
   final VoidCallback? onTap;
 
   const SwipeCard({
-    Key? key,
+    super.key,
     required this.task,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<SwipeCard> createState() => _SwipeCardState();
@@ -276,7 +276,7 @@ class _SwipeCardState extends State<SwipeCard>
                                   ),
                                 ),
                                 Text(
-                                  '${widget.task.budget.toStringAsFixed(0)}',
+                                  widget.task.budget.toStringAsFixed(0),
                                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                     color: AppTheme.likeGreen,
                                     fontWeight: FontWeight.bold,

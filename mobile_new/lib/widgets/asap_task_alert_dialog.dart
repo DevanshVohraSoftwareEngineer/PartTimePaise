@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
 
 class ASAPTaskAlertDialog extends StatelessWidget {
   final String taskId;
@@ -24,10 +23,10 @@ class ASAPTaskAlertDialog extends StatelessWidget {
     return AlertDialog(
       backgroundColor: Colors.red.shade900,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
+      title: const Row(
         children: [
           Icon(Icons.warning_amber_rounded, color: Colors.yellow, size: 32),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               '🚨 URGENT TASK NEARBY!',
@@ -46,7 +45,7 @@ class ASAPTaskAlertDialog extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -55,7 +54,7 @@ class ASAPTaskAlertDialog extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Budget: ₹$budget',
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.greenAccent,
               fontSize: 20,
               fontWeight: FontWeight.w900,
@@ -72,11 +71,11 @@ class ASAPTaskAlertDialog extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.timer, color: Colors.orange, size: 16),
+                const Icon(Icons.timer, color: Colors.orange, size: 16),
                 const SizedBox(width: 6),
                 Text(
                   'Expires in $minutesLeft minutes',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.orange,
                     fontWeight: FontWeight.bold,
                   ),
@@ -89,7 +88,7 @@ class ASAPTaskAlertDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Later', style: TextStyle(color: Colors.white70)),
+          child: const Text('Later', style: TextStyle(color: Colors.white70)),
         ),
         ElevatedButton(
           onPressed: () {
@@ -100,7 +99,7 @@ class ASAPTaskAlertDialog extends StatelessWidget {
             backgroundColor: Colors.greenAccent,
             foregroundColor: Colors.black,
           ),
-          child: Text('View Now', style: TextStyle(fontWeight: FontWeight.bold)),
+          child: const Text('View Now', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

@@ -20,7 +20,7 @@ create extension if not exists postgis;
 
 create table if not exists profiles (
 
-  id uuid references auth.users on delete cascade primary key,
+  id uuid primary key, -- REMOVED references auth.users to allow Debug Users & Offline Testing
 
   email text,
 
@@ -83,6 +83,9 @@ create table if not exists profiles (
 
 
 -- ROBUST COMPATIBILITY: Ensure columns exist if table already exists
+
+-- REMOVE FOREIGN KEY CONSTRAINT to allow Debug Users (Bypass mode)
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 
 alter table profiles add column if not exists is_online boolean default false;
 
@@ -254,11 +257,17 @@ create table if not exists tasks (
 
   bids_count integer default 0,
 
+  reach_count integer default 0, -- Total accounts reached
+
+  realtime_viewers_count integer default 0, -- Current active viewers
+
   
 
   created_at timestamp with time zone default now(),
 
-  updated_at timestamp with time zone default now()
+  updated_at timestamp with time zone default now(),
+
+  completed_at timestamp with time zone
 
 );
 
@@ -266,7 +275,29 @@ create table if not exists tasks (
 
 -- ROBUST COMPATIBILITY: Ensure columns exist if table already exists
 
+alter table tasks add column if not exists completed_at timestamp with time zone;
+
+-- Backfill completed_at for existing tasks
+update tasks set completed_at = updated_at where status = 'completed' and completed_at is null;
+
 alter table tasks add column if not exists type text default 'general';
+
+-- Automatically set completed_at when status becomes 'completed'
+create or replace function set_task_completed_at()
+returns trigger as $$
+begin
+  if NEW.status = 'completed' and (OLD.status is null or OLD.status != 'completed') then
+    NEW.completed_at = now();
+  end if;
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists on_task_completed_set_timestamp on tasks;
+create trigger on_task_completed_set_timestamp
+before update on tasks
+for each row
+execute function set_task_completed_at();
 
 alter table tasks add column if not exists pickup_lat double precision;
 
@@ -304,6 +335,33 @@ alter table tasks add column if not exists expires_at timestamp with time zone;
 
 alter table tasks add column if not exists client_verification_status text default 'pending';
 
+alter table tasks add column if not exists reach_count integer default 0;
+alter table tasks add column if not exists realtime_viewers_count integer default 0;
+alter table tasks add column if not exists viewed_by_ids uuid[] default '{}';
+
+-- Functions to track analytics
+create or replace function track_task_view(t_id uuid, u_id uuid)
+returns void as $$
+begin
+  update tasks
+  set 
+    viewed_by_ids = array_append(viewed_by_ids, u_id),
+    reach_count = reach_count + 1
+  where id = t_id 
+  and not (viewed_by_ids @> array[u_id]);
+end;
+$$ language plpgsql security definer;
+
+-- Realtime Viewer Counter Function
+DROP FUNCTION IF EXISTS update_realtime_viewers(uuid, integer);
+create or replace function update_realtime_viewers(t_id uuid, increment_val integer)
+returns void as $$
+begin
+  update tasks
+  set realtime_viewers_count = greatest(0, realtime_viewers_count + increment_val)
+  where id = t_id;
+end;
+$$ language plpgsql security definer;
 
 
 -- ========================================
@@ -847,6 +905,72 @@ create table if not exists bids (
   created_at timestamp with time zone default now()
 
 );
+
+
+
+-- --------------------------------------------------------
+
+-- 4. AI MEAL SCANNER (Persistent History)
+
+-- --------------------------------------------------------
+
+create table if not exists meal_scans (
+
+  id uuid default gen_random_uuid() primary key,
+
+  user_id uuid references profiles(id) on delete cascade not null,
+
+  item_name text not null,
+
+  calories integer default 0,
+
+  protein text,
+
+  carbs text,
+
+  fats text,
+
+  health_score integer,
+
+  ai_insight text,
+
+  proven_source text,
+
+  image_url text,
+
+  full_result jsonb,
+
+  created_at timestamp with time zone default now()
+
+);
+
+
+
+-- Index for user history
+
+create index if not exists meal_scans_user_id_idx on meal_scans(user_id);
+
+
+
+-- Enable RLS for Meal Scans
+
+alter table meal_scans enable row level security;
+
+
+
+create policy "Users can view their own meal scans if exists"
+
+  on meal_scans for select
+
+  using (auth.uid() = user_id);
+
+
+
+create policy "Users can insert their own meal scans if exists"
+
+  on meal_scans for insert
+
+  with check (auth.uid() = user_id);
 
 
 
@@ -2027,142 +2151,6 @@ alter table notifications add column if not exists data jsonb default '{}'::json
 
 
 -- C. Accept Gig Function
-
-drop function if exists accept_gig(uuid);
-
-create or replace function accept_gig(request_id uuid)
-
-returns uuid as $$ -- CHANGED: Now returns match_id
-
-declare
-
-  v_task_id uuid;
-
-  v_worker_id uuid;
-
-  v_task_status text;
-
-  v_match_id uuid;
-
-begin
-
-  select task_id, worker_id into v_task_id, v_worker_id
-
-  from gig_requests
-
-  where id = request_id;
-
-
-
-  if v_task_id is null then
-
-    raise exception 'Gig request not found';
-
-  end if;
-
-
-
-  select status into v_task_status
-
-  from tasks
-
-  where id = v_task_id
-
-  for update;
-
-
-
-  if v_task_status != 'open' and v_task_status != 'broadcasting' then
-
-    raise exception 'Task is no longer available';
-
-  end if;
-
-
-
-  -- 1. Assign Task
-
-  update tasks
-
-  set 
-
-    status = 'assigned',
-
-    worker_id = v_worker_id,
-
-    updated_at = now()
-
-  where id = v_task_id;
-
-  
-
-  -- 2. Mark worker as BUSY and update last order time (Fairness)
-
-  update profiles
-
-  set 
-
-    is_busy = true,
-
-    last_order_at = now()
-
-  where id = v_worker_id;
-
-
-
-  -- 3. Update Request Statuses
-
-  update gig_requests
-
-  set status = 'accepted'
-
-  where id = request_id;
-
-
-
-  update gig_requests
-
-  set status = 'missed'
-
-  where task_id = v_task_id and id != request_id;
-
-
-
-  -- 4. Create the Match (Chat Session) automatically
-
-  -- We return this ID to the mobile app for immediate navigation
-
-  insert into matches (task_id, client_id, worker_id)
-
-  select v_task_id, client_id, v_worker_id
-
-  from tasks 
-
-  where id = v_task_id
-
-  and not exists (select 1 from matches where task_id = v_task_id)
-
-  returning id into v_match_id;
-
-
-
-  -- If match already exists (shouldn't happen with logic above but safety), fetch it
-
-  if v_match_id is null then
-
-    select id into v_match_id from matches where task_id = v_task_id;
-
-  end if;
-
-
-
-  return v_match_id;
-
-end;
-
-$$ language plpgsql security definer;
-
-
 
 -- G. Chat Lifecycle Management (Step 6 & 9)
 
@@ -3984,36 +3972,59 @@ JOIN public.profiles wp ON m.worker_id = wp.id
 JOIN public.profiles cp ON m.client_id = cp.id
 LEFT JOIN latest_messages lm ON m.id = lm.match_id;
 
--- 2. Gig Acceptance RPC (Atomic)
--- Handles matching, task status, and request status in one transaction.
-CREATE OR REPLACE FUNCTION public.accept_gig(request_id UUID)
+-- Grant access to enriched_matches for UI
+grant select on public.enriched_matches to authenticated;
+
+-- 2. Gig Acceptance RPC (Atomic & Safe for Multiple Users)
+-- Handles matching, task status, and locking in one transaction.
+DROP FUNCTION IF EXISTS public.accept_gig(uuid);
+CREATE OR REPLACE FUNCTION public.accept_gig(p_request_id UUID)
 RETURNS UUID AS $$
 DECLARE
   v_task_id UUID;
   v_client_id UUID;
   v_worker_id UUID;
   v_match_id UUID;
+  v_task_status TEXT;
 BEGIN
-  -- Get info
-  SELECT task_id, worker_id INTO v_task_id, v_worker_id FROM public.gig_requests WHERE id = request_id;
-  SELECT client_id INTO v_client_id FROM public.tasks WHERE id = v_task_id;
+  -- 1. Fetch request details
+  SELECT task_id, worker_id INTO v_task_id, v_worker_id 
+  FROM public.gig_requests 
+  WHERE id = p_request_id;
+
+  -- 2. LOCK THE TASK ROW to prevent race conditions
+  SELECT status, client_id INTO v_task_status, v_client_id 
+  FROM public.tasks 
+  WHERE id = v_task_id 
+  FOR UPDATE;
   
-  -- Create Match
+  -- 3. Safety Check
+  IF v_task_status NOT IN ('open', 'broadcasting') THEN
+    RAISE EXCEPTION 'Task is already taken or unavailable (Status: %)', v_task_status;
+  END IF;
+  
+  -- 4. Create Match
   INSERT INTO public.matches (task_id, client_id, worker_id, status)
   VALUES (v_task_id, v_client_id, v_worker_id, 'active')
   RETURNING id INTO v_match_id;
   
-  -- Update Task & Request
-  UPDATE public.tasks SET status = 'matched' WHERE id = v_task_id;
-  UPDATE public.gig_requests SET status = 'accepted' WHERE id = request_id;
+  -- 5. Update Global State
+  UPDATE public.tasks SET status = 'assigned', worker_id = v_worker_id WHERE id = v_task_id;
+  UPDATE public.profiles SET is_busy = true, last_order_at = now() WHERE id = v_worker_id;
+  UPDATE public.gig_requests SET status = 'accepted' WHERE id = p_request_id;
+  UPDATE public.gig_requests SET status = 'missed' WHERE task_id = v_task_id AND id != p_request_id;
   
-  -- Create initial 'Match' system message
+  -- 6. Notify via Chat
   INSERT INTO public.chat_messages (match_id, sender_id, content, type)
   VALUES (v_match_id, v_client_id, 'You matched! Start the conversation.', 'system');
   
   RETURN v_match_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.accept_gig(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.accept_gig(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.accept_gig(uuid) TO service_role;
 
 -- 3. Stale Gig Expiration RPC (Heartbeat)
 CREATE OR REPLACE FUNCTION public.expire_stale_gig_requests()
@@ -4079,40 +4090,680 @@ AFTER UPDATE ON tasks
 FOR EACH ROW
 EXECUTE FUNCTION handle_task_status_chat_updates();
 
--- 2. Enhanced accept_gig (Atomic + System Notification)
--- This ensures that when a worker accepts, the task is matched and a welcome message is sent.
-CREATE OR REPLACE FUNCTION public.accept_gig_v3(request_id UUID)
-RETURNS UUID AS $$
-DECLARE
-  v_task_id UUID;
-  v_client_id UUID;
-  v_worker_id UUID;
-  v_match_id UUID;
-BEGIN
-  -- Get context
-  SELECT task_id, worker_id INTO v_task_id, v_worker_id FROM public.gig_requests WHERE id = request_id;
-  SELECT client_id INTO v_client_id FROM public.tasks WHERE id = v_task_id;
-  
-  -- Prevent double assignment
-  IF NOT EXISTS (SELECT 1 FROM public.tasks WHERE id = v_task_id AND (status = 'open' OR status = 'broadcasting')) THEN
-    RAISE EXCEPTION 'Task is no longer available';
-  END IF;
+-- MERGED FROM: append_matches.sql
+-- ==================================================
 
-  -- Create Match
-  INSERT INTO public.matches (task_id, client_id, worker_id, status)
-  VALUES (v_task_id, v_client_id, v_worker_id, 'active')
-  RETURNING id INTO v_match_id;
+
+-- --------------------------------------------------------
+-- MATCHES & MESSAGES (Added during Fix)
+-- --------------------------------------------------------
+create table if not exists matches (
+  id uuid default gen_random_uuid() primary key,
+  task_id uuid references tasks(id),
+  client_id uuid references profiles(id),
+  worker_id uuid references profiles(id),
+  status text default 'active',
+  created_at timestamp with time zone default now()
+);
+
+-- Enable RLS
+ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
+
+-- Allow Users to View their own matches (Client or Worker)
+DROP POLICY IF EXISTS "Users can view own matches" ON matches;
+CREATE POLICY "Users can view own matches" ON matches
+  FOR SELECT USING (
+    auth.uid() = client_id OR auth.uid() = worker_id
+  );
+
+-- Allow Clients to Create Matches
+DROP POLICY IF EXISTS "Clients can create matches" ON matches;
+CREATE POLICY "Clients can create matches" ON matches
+  FOR INSERT WITH CHECK (
+    auth.uid() = client_id
+  );
+
+-- Allow Updates (e.g. status change)
+DROP POLICY IF EXISTS "Participants can update matches" ON matches;
+CREATE POLICY "Participants can update matches" ON matches
+  FOR UPDATE USING (
+    auth.uid() = client_id OR auth.uid() = worker_id
+  );
+
+-- Fix Swipes RLS while we are at it
+ALTER TABLE swipes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own swipes" ON swipes;
+CREATE POLICY "Users can view own swipes" ON swipes
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create swipes" ON swipes;
+CREATE POLICY "Users can create swipes" ON swipes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+
+-- ==================================================
+-- MERGED FROM: apply_fixes.sql
+-- ==================================================
+
+-- ============================================
+-- FIX: Grants & Permissions (Run this in SQL Editor)
+-- ============================================
+
+-- 1. Grant Permissions to Authenticated Users
+grant usage on schema public to authenticated;
+grant all on profiles to authenticated;
+grant all on tasks to authenticated;
+grant all on matches to authenticated;
+grant all on chat_messages to authenticated;
+grant all on swipes to authenticated;
+grant all on gig_requests to authenticated;
+grant all on notifications to authenticated;
+grant all on id_verifications to authenticated;
+grant all on location_updates to authenticated;
+grant all on dispatch_analytics to authenticated;
+grant all on bids to authenticated;
+grant all on task_events to authenticated;
+
+-- 2. Ensure Sequences are accessible (if any)
+grant usage, select on all sequences in schema public to authenticated;
+
+-- 3. Simplify Matches Policy (To rule out complex joins failing)
+drop policy if exists "Users can create matches for their tasks" on matches;
+create policy "Users can create matches for their tasks"
+on matches for insert
+with check (
+  auth.uid() = client_id
+);
+
+-- 4. Ensure Chat Messages Policies exist
+drop policy if exists "Users can send messages in their matches" on chat_messages;
+create policy "Users can send messages in their matches"
+on chat_messages for insert
+with check (
+  auth.uid() = sender_id
+);
+
+-- 5. Fix Task Ownership Policy just in case
+drop policy if exists "Users can update own tasks" on tasks;
+create policy "Users can update own tasks"
+on tasks for update
+using (auth.uid() = client_id);
+
+-- 6. Add Missing Columns to Notifications
+alter table notifications add column if not exists related_id text;
+alter table notifications add column if not exists data jsonb default '{}'::jsonb;
+
+
+-- ==================================================
+-- MERGED FROM: assign_nearest_worker_rpc.sql
+-- ==================================================
+
+-- ==========================================
+-- Feature: Task Assignment (RPC Version)
+-- Goal: Find and assign a task to the nearest student from the same college.
+-- ==========================================
+
+create or replace function assign_nearest_worker(p_task_id uuid)
+returns void as $$
+declare
+  v_assigned_worker_id uuid;
+  v_client_college text;
+  v_task_lat double precision;
+  v_task_lng double precision;
+  v_client_id uuid;
+begin
+  -- 1. Get task details and client's college
+  select 
+    t.pickup_lat, t.pickup_lng, t.client_id, p.college 
+  into 
+    v_task_lat, v_task_lng, v_client_id, v_client_college
+  from tasks t
+  join profiles p on t.client_id = p.id
+  where t.id = p_task_id;
+
+  -- 2. Find nearest eligible student
+  -- Rules: Online, same college, not busy, not the client, within 3km
+  select id into v_assigned_worker_id
+  from profiles
+  where 
+    is_online = true
+    and is_busy = false
+    and college = v_client_college
+    and id != v_client_id
+    and current_lat is not null 
+    and current_lng is not null
+    and st_dwithin(
+      st_makepoint(current_lng, current_lat)::geography,
+      st_makepoint(v_task_lng, v_task_lat)::geography,
+      3000 -- 3km radius
+    )
+  order by 
+    st_distance(
+      st_makepoint(current_lng, current_lat)::geography,
+      st_makepoint(v_task_lng, v_task_lat)::geography
+    )
+  limit 1;
+
+  -- 3. If found, update task status and worker_id
+  if v_assigned_worker_id is not null then
+    update tasks
+    set 
+      worker_id = v_assigned_worker_id,
+      status = 'assigned'
+    where id = p_task_id;
+    
+    -- Log assignment event
+    insert into task_events (task_id, event_type, actor_id, metadata)
+    values (p_task_id, 'MANUAL_ASSIGNMENT', v_assigned_worker_id, '{"method": "rpc"}');
+  end if;
+end;
+$$ language plpgsql security definer;
+
+
+-- ==================================================
+-- MERGED FROM: auto_assign_task.sql
+-- ==================================================
+
+-- ==========================================
+-- Feature: Automatic Task Assignment
+-- Goal: Automatically assign a task to the nearest student from the same college within 3km.
+-- ==========================================
+
+-- 1. Function to find and assign the nearest eligible student
+create or replace function auto_assign_task_logic()
+returns trigger as $$
+declare
+  v_assigned_worker_id uuid;
+  v_client_college text;
+begin
+  -- Only attempt auto-assignment if the task is 'open' and has pickup coordinates
+  if NEW.status != 'open' or NEW.pickup_lat is null or NEW.pickup_lng is null then
+    return NEW;
+  end if;
+
+  -- Get client's college
+  select college into v_client_college
+  from profiles
+  where id = NEW.client_id;
+
+  -- 2. Find nearest eligible student
+  -- Must be online, from the same college, not busy, not the client, and within 3km
+  select id into v_assigned_worker_id
+  from profiles
+  where 
+    is_online = true
+    and is_busy = false
+    and college = v_client_college
+    and id != NEW.client_id
+    and current_lat is not null 
+    and current_lng is not null
+    and st_dwithin(
+      st_makepoint(current_lng, current_lat)::geography,
+      st_makepoint(NEW.pickup_lng, NEW.pickup_lat)::geography,
+      3000 -- 3km radius
+    )
+  order by 
+    st_distance(
+      st_makepoint(current_lng, current_lat)::geography,
+      st_makepoint(NEW.pickup_lng, NEW.pickup_lat)::geography
+    )
+  limit 1;
+
+  -- 3. If an eligible worker is found, assign them and update status
+  if v_assigned_worker_id is not null then
+    NEW.worker_id := v_assigned_worker_id;
+    NEW.status := 'assigned';
+    
+    -- Log the assignment event (optional but recommended for visibility)
+    -- This assumes task_events table exists from the consolidated schema
+    insert into task_events (task_id, event_type, actor_id, metadata)
+    values (NEW.id, 'AUTO_ASSIGNED', v_assigned_worker_id, jsonb_build_object(
+      'distance_meters', st_distance(
+        st_makepoint(NEW.pickup_lng, NEW.pickup_lat)::geography,
+        (select st_makepoint(current_lng, current_lat)::geography from profiles where id = v_assigned_worker_id)
+      )
+    ));
+  end if;
+
+  return NEW;
+end;
+$$ language plpgsql;
+
+-- 2. Trigger to run before task insertion
+-- Using BEFORE INSERT so we can modify the NEW record directly
+drop trigger if exists on_task_created_auto_assign on tasks;
+create trigger on_task_created_auto_assign
+before insert on tasks
+for each row
+execute function auto_assign_task_logic();
+
+
+-- ==================================================
+-- MERGED FROM: availability_logic.sql
+-- ==================================================
+
+-- ==========================================
+-- Feature: Student Availability
+-- Goal: Automatically mark students as offline after 30 minutes of inactivity.
+-- ==========================================
+
+-- 1. Function to manually update availability
+create or replace function set_student_availability(p_is_online boolean)
+returns void as $$
+begin
+  update profiles
+  set 
+    is_online = p_is_online,
+    last_seen = now(),
+    updated_at = now()
+  where id = auth.uid();
+end;
+$$ language plpgsql security definer;
+
+-- 2. Function to update last_seen heartbeat
+create or replace function update_student_heartbeat()
+returns void as $$
+begin
+  update profiles
+  set 
+    last_seen = now(),
+    updated_at = now()
+  where id = auth.uid();
+end;
+$$ language plpgsql security definer;
+
+-- 3. Function to cleanup inactive students (Auto-Offline)
+-- This marks users offline if they haven't sent a heartbeat in 30+ minutes
+-- Can be called via a worker or periodic maintenance RPC
+create or replace function cleanup_inactive_students()
+returns integer as $$
+declare
+  v_count integer;
+begin
+  update profiles
+  set is_online = false
+  where is_online = true
+  and (last_seen < now() - interval '30 minutes' or last_seen is null);
   
-  -- Update Global State
-  UPDATE public.tasks SET status = 'matched', worker_id = v_worker_id WHERE id = v_task_id;
-  UPDATE public.gig_requests SET status = 'accepted' WHERE id = request_id;
-  UPDATE public.gig_requests SET status = 'missed' WHERE task_id = v_task_id AND id != request_id;
-  
-  -- Notify via Chat
-  INSERT INTO public.chat_messages (match_id, sender_id, content, type)
-  VALUES (v_match_id, v_client_id, 'You matched! Start the conversation.', 'system');
-  
-  RETURN v_match_id;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$ language plpgsql security definer;
+
+
+-- ==================================================
+-- MERGED FROM: cleanup_notifications.sql
+-- ==================================================
+
+-- Trigger to cleanup notifications when a task is accepted
+create or replace function cleanup_task_notifications()
+returns trigger as $$
+begin
+  -- When status changes to 'assigned', delete all ASAP notifications for this task
+  if new.status = 'assigned' and old.status != 'assigned' then
+    delete from notifications
+    where type = 'asap_task' 
+    and (data->>'task_id')::uuid = new.id;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists on_task_assigned_cleanup on tasks;
+create trigger on_task_assigned_cleanup
+after update on tasks
+for each row
+execute function cleanup_task_notifications();
+
+
+-- ==================================================
+-- MERGED FROM: earnings_logic.sql
+-- ==================================================
+
+-- ==========================================
+-- Feature: Earnings Calculation Logic
+-- Rules:
+-- 1. base_pay = task.budget
+-- 2. distance_bonus = 5 INR per km after 2km
+-- 3. surge_bonus = 15% during peak hours (18:00 - 22:00)
+-- 4. incentive = 200 INR for every 5 completed tasks
+-- ==========================================
+
+-- Function to calculate earnings for a single task
+create or replace function calculate_task_earnings(p_task_id uuid)
+returns jsonb as $$
+declare
+  v_task record;
+  v_base_pay double precision;
+  v_distance_bonus double precision := 0;
+  v_surge_bonus double precision := 0;
+  v_is_peak_hour boolean;
+  v_hour integer;
+begin
+  select budget, distance_km, created_at into v_task
+  from tasks
+  where id = p_task_id;
+
+  if not found then
+    return null;
+  end if;
+
+  -- 1. Base Pay
+  v_base_pay := v_task.budget;
+
+  -- 2. Distance Bonus (₹5/km after 2km)
+  if v_task.distance_km > 2 then
+    v_distance_bonus := (v_task.distance_km - 2) * 5;
+  end if;
+
+  -- 3. Surge Bonus (15% during 6 PM - 10 PM)
+  v_hour := extract(hour from v_task.created_at at time zone 'Asia/Kolkata');
+  if v_hour >= 18 and v_hour < 22 then
+    v_surge_bonus := v_base_pay * 0.15;
+  end if;
+
+  return jsonb_build_object(
+    'base_pay', v_base_pay,
+    'distance_bonus', round(v_distance_bonus::numeric, 2),
+    'surge_bonus', round(v_surge_bonus::numeric, 2),
+    'total_task_earnings', round((v_base_pay + v_distance_bonus + v_surge_bonus)::numeric, 2)
+  );
+end;
+$$ language plpgsql stable;
+
+-- View for Worker Earnings History
+create or replace view worker_earnings_summary as
+select 
+  t.worker_id,
+  t.id as task_id,
+  t.title as task_title,
+  t.completed_at,
+  (calculate_task_earnings(t.id)->>'base_pay')::double precision as base_pay,
+  (calculate_task_earnings(t.id)->>'distance_bonus')::double precision as distance_bonus,
+  (calculate_task_earnings(t.id)->>'surge_bonus')::double precision as surge_bonus,
+  (calculate_task_earnings(t.id)->>'total_task_earnings')::double precision as total_task_earnings
+from tasks t
+where t.status = 'completed' and t.worker_id is not null;
+
+-- Function to calculate milestone incentives (₹200 for every 5 tasks)
+create or replace function get_worker_milestone_incentives(p_worker_id uuid)
+returns double precision as $$
+declare
+  v_completed_count integer;
+begin
+  select count(*) into v_completed_count
+  from tasks
+  where worker_id = p_worker_id and status = 'completed';
+
+  -- ₹200 for every block of 5
+  return (v_completed_count / 5) * 200;
+end;
+$$ language plpgsql stable;
+
+-- Function: Calculate Weekly Earnings Summary
+-- Parameters:
+--   p_worker_id: The ID of the worker
+--   p_week_start: The start date of the week (e.g., '2024-02-05')
+create or replace function get_weekly_earnings(p_worker_id uuid, p_week_start date)
+returns table (
+  total_base_pay double precision,
+  total_distance_bonus double precision,
+  total_surge_bonus double precision,
+  total_task_earnings double precision,
+  task_count bigint
+) as $$
+begin
+  return query
+  select 
+    coalesce(sum(base_pay), 0)::double precision,
+    coalesce(sum(distance_bonus), 0)::double precision,
+    coalesce(sum(surge_bonus), 0)::double precision,
+    coalesce(sum(total_task_earnings), 0)::double precision,
+    count(*)
+  from worker_earnings_summary
+  where worker_id = p_worker_id
+  and completed_at >= p_week_start::timestamp
+  and completed_at < (p_week_start + interval '7 days')::timestamp;
+end;
+$$ language plpgsql stable;
+
+
+-- ==================================================
+-- MERGED FROM: fix_matches_rls.sql
+-- ==================================================
+
+-- Enable RLS
+ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
+
+-- Allow Users to View their own matches (Client or Worker)
+DROP POLICY IF EXISTS "Users can view own matches" ON matches;
+CREATE POLICY "Users can view own matches" ON matches
+  FOR SELECT USING (
+    auth.uid() = client_id OR auth.uid() = worker_id
+  );
+
+-- Allow Clients to Create Matches
+DROP POLICY IF EXISTS "Clients can create matches" ON matches;
+CREATE POLICY "Clients can create matches" ON matches
+  FOR INSERT WITH CHECK (
+    auth.uid() = client_id
+  );
+
+-- Allow Updates (e.g. status change)
+DROP POLICY IF EXISTS "Participants can update matches" ON matches;
+CREATE POLICY "Participants can update matches" ON matches
+  FOR UPDATE USING (
+    auth.uid() = client_id OR auth.uid() = worker_id
+  );
+
+-- Fix Swipes RLS while we are at it
+ALTER TABLE swipes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own swipes" ON swipes;
+CREATE POLICY "Users can view own swipes" ON swipes
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create swipes" ON swipes;
+CREATE POLICY "Users can create swipes" ON swipes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+
+-- ==================================================
+-- MERGED FROM: restore_chat.sql
+-- ==================================================
+
+
+-- --------------------------------------------------------
+-- MISSING: CHAT MESSAGES & LIFECYCLE (Restored)
+-- --------------------------------------------------------
+
+create table if not exists chat_messages (
+  id uuid default gen_random_uuid() primary key,
+  match_id uuid references matches(id) on delete cascade,
+  sender_id uuid references profiles(id) on delete cascade,
+  content text,
+  type text default 'text', -- 'text', 'image', 'video_call', 'video_call_request'
+  metadata jsonb,
+  is_read boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+-- Enable RLS
+alter table chat_messages enable row level security;
+
+-- CHAT MESSAGES POLICIES
+drop policy if exists "Users can send messages in their matches" on chat_messages;
+create policy "Users can send messages in their matches"
+on chat_messages for insert
+with check (
+  auth.uid() = sender_id and
+  exists (
+    select 1 from matches
+    where id = match_id
+    and (client_id = auth.uid() or worker_id = auth.uid())
+  )
+);
+
+drop policy if exists "Users can view messages in their matches" on chat_messages;
+create policy "Users can view messages in their matches"
+on chat_messages for select
+using (
+  exists (
+    select 1 from matches
+    where id = match_id
+    and (client_id = auth.uid() or worker_id = auth.uid())
+  )
+);
+
+-- Chat Lifecycle Trigger (Auto-messages on status change)
+create or replace function handle_task_status_chat_updates()
+returns trigger as $$
+declare
+  v_match_id uuid;
+  v_system_content text;
+begin
+  -- Find the match/chat session for this task
+  select id into v_match_id from matches where task_id = NEW.id;
+
+  if v_match_id is not null then
+    -- Decide message content based on status change
+    if NEW.status = 'assigned' and OLD.status != 'assigned' then
+      v_system_content := '🔒 Chat secure. Worker assigned.';
+    elsif NEW.status = 'in_progress' and OLD.status != 'in_progress' then
+      v_system_content := '🚀 Working on it! Rider is at pickup.';
+    elsif NEW.status = 'completed' then
+      v_system_content := '✅ Deal closed. Task completed.';
+    elsif NEW.status = 'cancelled' then
+      v_system_content := '❌ Task cancelled.';
+    end if;
+
+    -- Insert system message if we have a status update
+    if v_system_content is not null then
+      insert into chat_messages (match_id, sender_id, content, type)
+      values (v_match_id, NEW.client_id, v_system_content, 'system');
+    end if;
+  end if;
+
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists on_task_status_chat_sync on tasks;
+create trigger on_task_status_chat_sync
+after update on tasks
+for each row
+execute function handle_task_status_chat_updates();
+
+
+-- ==================================================
+-- MERGED FROM: restore_missing.sql
+-- ==================================================
+
+
+-- MISSING: Search Radius for Zomato Logic
+alter table tasks add column if not exists search_radius_meters integer default 2000;
+alter table tasks add column if not exists candidate_ids uuid[] default '{}';
+alter table tasks add column if not exists last_retry_at timestamp with time zone;
+alter table tasks add column if not exists completed_at timestamp with time zone;
+
+-- ============================================
+-- FINAL SNAPSHOT UPDATES (Social Review & ASAP Sync)
+-- ============================================
+
+-- 1. Automatic Task Status Update on Match
+-- Ensures that when a client accepts a candidate manually, the task is locked.
+CREATE OR REPLACE FUNCTION public.handle_manual_match()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Mark task as assigned
+  UPDATE public.tasks 
+  SET status = 'assigned', 
+      worker_id = NEW.worker_id 
+  WHERE id = NEW.task_id;
+
+  -- Mark worker as busy (Zomato logic)
+  UPDATE public.profiles 
+  SET is_busy = true, 
+      last_order_at = now() 
+  WHERE id = NEW.worker_id;
+
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_manual_match on matches;
+CREATE TRIGGER on_manual_match
+AFTER INSERT ON matches
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_manual_match();
+
+-- 2. Social Review Policy Update
+-- Allows clients to "Reject" candidates in the interested list by updating the worker's swipe.
+DROP POLICY IF EXISTS "Clients can manage swipes on their tasks" ON swipes;
+CREATE POLICY "Clients can manage swipes on their tasks" ON swipes
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.id = swipes.task_id
+      AND t.client_id = auth.uid()
+    )
+  );
+
+-- Allows clients to see swipes on tasks they posted (to show interested candidates)
+DROP POLICY IF EXISTS "Clients can view swipes on their tasks" ON swipes;
+CREATE POLICY "Clients can view swipes on their tasks" ON swipes
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.id = swipes.task_id
+      AND t.client_id = auth.uid()
+    )
+  );
+
+-- 3. Optimization: Universal Grants
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
+
+-- 4. Realtime Replication Set
+-- Using DO block to avoid errors if publishing fails in some environments
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'matches') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE matches;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'chat_messages') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'tasks') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'swipes') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE swipes;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'gig_requests') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE gig_requests;
+  END IF;
+EXCEPTION WHEN OTHERS THEN 
+  -- Silent skip if publication doesn't exist (happens in local dev sometimes)
+  RAISE NOTICE 'Skipped publication assignment: %', SQLERRM;
+END $$;
+-- Allow task clients to view swipes (applications) on their own tasks
+drop policy if exists "Users can view swipes on their tasks" on swipes;
+
+create policy "Users can view swipes on their tasks"
+on swipes for select
+using (
+  exists (
+    select 1 from tasks
+    where tasks.id = swipes.task_id
+    and tasks.client_id = auth.uid()
+  )
+);
+
+-- ==========================================
+-- TASK ANALYTICS EXTENSION
+-- ==========================================
+-- Add tracking columns to tasks table
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reach_count INTEGER DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS realtime_viewers_count INTEGER DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS viewed_by_ids UUID[] DEFAULT '{}';

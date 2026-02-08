@@ -104,7 +104,7 @@ class AppNotification {
       title: json['title'],
       message: json['message'],
       type: parseType(json['type']),
-      createdAt: DateTime.parse(json['created_at'] ?? json['createdAt']), // Handle both cases just to be safe
+      createdAt: DateTime.parse(json['created_at'] ?? json['createdAt']).toLocal(), // Handle both cases just to be safe
       isRead: json['is_read'] ?? json['isRead'] ?? false,
       isArchived: json['is_archived'] ?? json['isArchived'] ?? false,
       metadata: json['data'] ?? json['metadata'], // DB uses 'data', app might use 'metadata'

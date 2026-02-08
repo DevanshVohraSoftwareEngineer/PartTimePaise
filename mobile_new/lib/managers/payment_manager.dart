@@ -15,7 +15,28 @@ class PaymentManager {
 
   void _initializeRazorpay() {
     _razorpay = Razorpay();
-    // razorpay event handlers...
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    print('✅ Razorpay: Payment Success: ${response.paymentId}');
+    // Here we would confirm with Supabase via Edge Function or DB trigger
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Payment Successful! Processing transaction...'), backgroundColor: Colors.green),
+    );
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    print('❌ Razorpay: Payment Error: ${response.code} - ${response.message}');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Payment Failed: ${response.message}'), backgroundColor: Colors.red),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    print('💰 Razorpay: External Wallet Selected: ${response.walletName}');
   }
 
   void dispose() {
@@ -30,8 +51,11 @@ class PaymentManager {
     required double amount,
     required PaymentMethod paymentMethod,
   }) async {
-    return Payment(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    // Generate a unique order ref
+    final orderId = 'pay_${DateTime.now().millisecondsSinceEpoch}';
+
+    final payment = Payment(
+      id: orderId,
       taskId: taskId,
       clientId: clientId,
       workerId: workerId,
@@ -43,10 +67,45 @@ class PaymentManager {
       status: PaymentStatus.pending,
       createdAt: DateTime.now(),
     );
+
+    // ✨ Magic: Record the pending payment in Supabase
+    await _supabaseService.client.from('payments').insert({
+      'id': orderId,
+      'task_id': taskId,
+      'client_id': clientId,
+      'worker_id': workerId,
+      'amount': amount,
+      'platform_fee': payment.platformFee,
+      'total_amount': payment.totalAmount,
+      'status': 'pending',
+      'payment_method': paymentMethod.toString().split('.').last,
+      'type': 'instant',
+    });
+
+    return payment;
   }
 
   Future<void> processPayment(Payment payment, String email, String contact) async {
-    // Razorpay logic
+    final options = {
+      'key': 'rzp_test_YOUR_KEY_HERE', // Use test key initially
+      'amount': (payment.totalAmount * 100).toInt(), // Razorpay expects paise (INR)
+      'name': 'PartTimePaise',
+      'description': 'Payment for Task: ${payment.taskId.substring(0, 8)}',
+      'timeout': 300, // in seconds
+      'prefill': {
+        'contact': contact,
+        'email': email,
+      },
+      'external': {
+        'wallets': ['paytm']
+      }
+    };
+
+    try {
+      _razorpay.open(options);
+    } catch (e) {
+      print('❌ Razorpay Open Error: $e');
+    }
   }
 
   Future<void> createPaymentDemand({

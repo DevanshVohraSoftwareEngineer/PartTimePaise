@@ -30,35 +30,35 @@ class ScaffoldWithNavBar extends StatelessWidget {
         return true; // Allow app exit from Home
       },
       child: Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-              width: 0.5,
+        body: navigationShell,
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                width: 0.5,
+              ),
             ),
           ),
+          child: NavigationBar(
+            selectedIndex: navigationShell.currentIndex,
+            onDestinationSelected: _goBranch,
+            height: 65, // More compact
+            elevation: 0,
+            backgroundColor: isDark ? Colors.black : Colors.white,
+            indicatorColor: Colors.transparent, // Minimalist: No indicator, just color change
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: [
+              _buildNavItem(Icons.explore_outlined, Icons.explore, 'Explore', isDark),
+              _buildCustomHubItem(isDark),
+              _buildNavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat', isDark),
+              _buildNavItem(Icons.add_circle_outline, Icons.add_circle, 'Post', isDark),
+              _buildNavItem(Icons.assignment_outlined, Icons.assignment, 'Posted', isDark),
+              _buildNavItem(Icons.work_outline, Icons.work, 'Applied', isDark),
+              _buildNavItem(Icons.person_outline, Icons.person, 'Profile', isDark),
+            ],
+          ),
         ),
-        child: NavigationBar(
-          selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: _goBranch,
-          height: 65, // More compact
-          elevation: 0,
-          backgroundColor: isDark ? Colors.black : Colors.white,
-          indicatorColor: Colors.transparent, // Minimalist: No indicator, just color change
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            _buildNavItem(Icons.explore_outlined, Icons.explore, 'Explore', isDark),
-            _buildCustomHubItem(isDark),
-            _buildNavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat', isDark),
-            _buildNavItem(Icons.add_circle_outline, Icons.add_circle, 'Post', isDark),
-            _buildNavItem(Icons.assignment_outlined, Icons.assignment, 'Posted', isDark),
-            _buildNavItem(Icons.work_outline, Icons.work, 'Applied', isDark),
-            _buildNavItem(Icons.person_outline, Icons.person, 'Profile', isDark),
-          ],
-        ),
-      ),
       ),
     );
   }

@@ -60,7 +60,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (path == '/splash') return null;
       if (authState.isLoading && authState.user == null) return null;
 
-      // ... rest of logic ...
+      // Handle Password Recovery Redirection
+      if (authState.isPasswordRecovery && path != '/reset-password') {
+        return '/reset-password';
+      }
+
+      final isLoginRoute = path == '/login' || path == '/signup' || path == '/forgot-password' || path == '/verification' || path == '/reset-password';
       
       if (!isAuthenticated && !isLoginRoute) {
         return '/login';

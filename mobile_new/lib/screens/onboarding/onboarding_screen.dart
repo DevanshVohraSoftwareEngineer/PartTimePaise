@@ -20,7 +20,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   final List<OnboardingPage> _pages = [
     const OnboardingPage(
-      title: 'Welcome to PartTimePaise',
+      title: 'Welcome to Happle',
       subtitle: 'Connect with local opportunities and earn money doing what you love',
       image: 'assets/images/onboarding_1.png',
       color: AppTheme.superLikeBlue,
@@ -326,7 +326,7 @@ class _UserTypeSelectionSheetState extends ConsumerState<UserTypeSelectionSheet>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'How do you want to use PartTimePaise?',
+            'How do you want to use Happle?',
             style: AppTheme.heading2,
             textAlign: TextAlign.center,
           ),
@@ -698,7 +698,7 @@ class ClientProfileSetupScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Welcome to PartTimePaise'),
+        title: const Text('Welcome to Happle'),
         automaticallyImplyLeading: false,
       ),
       body: Padding(

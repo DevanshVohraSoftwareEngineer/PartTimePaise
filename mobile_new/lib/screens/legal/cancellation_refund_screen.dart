@@ -106,7 +106,7 @@ class CancellationRefundScreen extends StatelessWidget {
 
             _buildSection(
               '1. Overview',
-              'PartTimePaise Technologies Pvt. Ltd. is committed to providing fair and transparent cancellation and refund policies. This policy outlines the terms under which users can cancel services and request refunds for our platform.',
+              'Happle Technologies Pvt. Ltd. is committed to providing fair and transparent cancellation and refund policies. This policy outlines the terms under which users can cancel services and request refunds for our platform.',
             ),
 
             _buildSection(
@@ -243,14 +243,14 @@ class CancellationRefundScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PartTimePaise Technologies Pvt. Ltd.',
+                    'Happle Technologies Pvt. Ltd.',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   SizedBox(height: 8),
-                  Text('Email: refunds@parttimepaise.com'),
+                  Text('Email: refunds@happle.com'),
                   Text('Phone: +91-1800-XXX-XXXX'),
                   Text('Support Hours: Mon-Fri 9:00 AM - 6:00 PM IST'),
                   Text('Address: 123 Business District, Tech Park, Sector 15, Gurugram, Haryana - 122001, India'),

@@ -106,7 +106,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               '1. Introduction',
-              'PartTimePaise Technologies Pvt. Ltd. ("we," "our," or "us") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application (the "App") and related services.',
+              'Happle Technologies Pvt. Ltd. ("we," "our," or "us") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application (the "App") and related services.',
             ),
 
             _buildSection(
@@ -226,14 +226,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PartTimePaise Technologies Pvt. Ltd.',
+                    'Happle Technologies Pvt. Ltd.',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   SizedBox(height: 8),
-                  Text('Email: privacy@parttimepaise.com'),
+                  Text('Email: privacy@happle.com'),
                   Text('Phone: +91-1800-XXX-XXXX'),
                   Text('Address: 123 Business District, Tech Park, Sector 15, Gurugram, Haryana - 122001, India'),
                 ],

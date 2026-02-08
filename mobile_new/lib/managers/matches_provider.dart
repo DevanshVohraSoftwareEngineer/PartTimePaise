@@ -50,8 +50,6 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
   void _startExpiryTimer() {
     _expiryTimer?.cancel();
     _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (state.candidates.isEmpty) return;
-      
       final now = DateTime.now();
       final validCandidates = state.candidates.where((c) {
         final createdAt = DateTime.parse(c['created_at']);
@@ -61,8 +59,10 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
 
       if (validCandidates.length != state.candidates.length) {
         state = state.copyWith(candidates: validCandidates);
-      } else {
-        // Trigger a state update to refresh timers in UI
+        // PERMANENT REMOVAL: Clean up SQL whenever we detect an expiry in the UI
+        _supabaseService.deleteExpiredSwipes();
+      } else if (validCandidates.isNotEmpty) {
+        // Only trigger a state update to refresh timers in UI if there are candidates to refresh
         state = state.copyWith(candidates: [...state.candidates]);
       }
     });
@@ -107,11 +107,12 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
     for (var json in data) {
       final matchId = json['id'].toString();
       
-      // AUTO-EXPIRY: Skip matches that are older than 24 hours
-      final matchedAt = DateTime.parse(json['created_at'].toString());
-      if (DateTime.now().difference(matchedAt).inHours >= 24) {
-        continue; 
-      }
+      final matchedAt = json['created_at'] != null 
+          ? DateTime.parse(json['created_at'].toString()) 
+          : DateTime.now();
+      
+      // Removed proactive 24h filter here - let ChatScreen handle the "Expired" UI
+      // to avoid infinite loading spinners on older matches.
 
       try {
         final enrichedData = await _supabaseService.client
@@ -131,7 +132,7 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
               
           final profile = await _supabaseService.client
               .from('profiles')
-              .select('name, avatar_url, id_card_url, selfie_url, verification_status')
+              .select('name, avatar_url')
               .eq('id', otherUserId)
               .maybeSingle();
               
@@ -139,14 +140,8 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
             hydratedMatches.add(match.copyWith(
               workerName: match.workerId == otherUserId ? profile['name'] : match.workerName,
               workerAvatar: match.workerId == otherUserId ? profile['avatar_url'] : match.workerAvatar,
-              workerIdCardUrl: match.workerId == otherUserId ? profile['id_card_url'] : match.workerIdCardUrl,
-              workerSelfieUrl: match.workerId == otherUserId ? profile['selfie_url'] : match.workerSelfieUrl,
-              workerVerificationStatus: match.workerId == otherUserId ? profile['verification_status'] : match.workerVerificationStatus,
               clientName: match.clientId == otherUserId ? profile['name'] : match.clientName,
               clientAvatar: match.clientId == otherUserId ? profile['avatar_url'] : match.clientAvatar,
-              clientIdCardUrl: match.clientId == otherUserId ? profile['id_card_url'] : match.clientIdCardUrl,
-              clientSelfieUrl: match.clientId == otherUserId ? profile['selfie_url'] : match.clientSelfieUrl,
-              clientVerificationStatus: match.clientId == otherUserId ? profile['verification_status'] : match.clientVerificationStatus,
             ));
           } else {
             hydratedMatches.add(match);
@@ -181,8 +176,13 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
     ).toList();
     
     List<Map<String, dynamic>> enrichedCandidates = [];
+    final now = DateTime.now();
     
     for (var swipe in relevantSwipes) {
+      // PROACTIVELY FILTER OUT EXPIRED SWIPES (60 mins)
+      final createdAt = DateTime.parse(swipe['created_at']);
+      if (now.difference(createdAt).inMinutes >= 60) continue;
+
       final profile = await _supabaseService.client
         .from('profiles')
         .select('name, avatar_url, rating')
@@ -211,50 +211,71 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
 
   Future<String?> acceptCandidate(String taskId, String workerId) async {
     try {
-      // Optimistically find candidate data to create a local match object
-      final candidate = state.candidates.firstWhere(
-        (c) => c['worker_id'] == workerId && c['task_id'] == taskId,
-        orElse: () => {},
-      );
-
-      final matchId = await _supabaseService.createMatch(taskId, workerId);
+      print("🚀 MatchesNotifier: Accepting Candidate. Task: $taskId, Worker: $workerId");
       
-      if (candidate.isNotEmpty) {
-        // Optimistically add to matches list if not already there via stream
-        final optimisticMatch = TaskMatch(
-          id: matchId,
-          taskId: taskId,
-          workerId: workerId,
-          clientId: _userId ?? '',
-          status: 'active',
-          matchedAt: DateTime.now(),
-          workerName: candidate['worker_name'],
-          workerAvatar: candidate['worker_avatar'],
-          task: Task(
-            id: taskId,
-            title: candidate['task_title'] ?? 'Task',
-            budget: (candidate['worker_rating'] ?? 0.0).toDouble(), // placeholder
-            status: 'assigned',
-            description: '',
-            category: '',
-            clientId: _supabaseService.currentUser?.id ?? '',
-            taskStatus: TaskStatus.inProgress,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-            clientName: '',
-            clientAvatar: '',
-          ),
-        );
-        
+      // 1. Check if match already exists - Use list selection for max robustness
+      final existingResponse = await _supabaseService.client
+          .from('matches')
+          .select('id')
+          .eq('task_id', taskId)
+          .eq('worker_id', workerId);
+      
+      final existingList = existingResponse as List;
+      String? matchId;
+      
+      if (existingList.isNotEmpty) {
+        matchId = existingList.first['id'];
+        print("💡 MatchesNotifier: Match already exists in DB: $matchId");
+      } else {
+        // 2. Create the match if it doesn't exist
+        print("🛠️ MatchesNotifier: No existing match. Creating new one...");
+        try {
+          matchId = await _supabaseService.createMatch(taskId, workerId);
+          print("✅ MatchesNotifier: Match created successfully: $matchId");
+        } catch (e) {
+          print("⚠️ MatchesNotifier: Create attempt failed, checking one last time: $e");
+          // Final last-second check in case of race condition or hidden insert
+          final retryResponse = await _supabaseService.client
+              .from('matches')
+              .select('id')
+              .eq('task_id', taskId)
+              .eq('worker_id', workerId);
+          final retryList = retryResponse as List;
+          if (retryList.isNotEmpty) {
+            matchId = retryList.first['id'];
+            print("✅ MatchesNotifier: Found match on final retry: $matchId");
+          } else {
+            print("❌ MatchesNotifier: Truly failed to create or find match. Rethrowing...");
+            rethrow;
+          }
+        }
+      }
+
+      if (matchId != null) {
+        // 3. Optimistically hide the candidate from the list
         state = state.copyWith(
-          matches: [optimisticMatch, ...state.matches],
-          candidates: state.candidates.where((c) => c['worker_id'] != workerId || c['task_id'] != taskId).toList(),
+          candidates: state.candidates.where((c) => 
+            c['worker_id'] != workerId || c['task_id'] != taskId
+          ).toList(),
         );
+        print("✨ MatchesNotifier: State updated. Candidate hidden.");
+
+        // 4. Mark the swipe as handled in DB so it doesn't reappear on reload
+        try {
+          await _supabaseService.rejectCandidate(taskId, workerId); // Flips direction to 'left'
+          print("✅ MatchesNotifier: Swipe marked as handled in DB.");
+        } catch (e) {
+          print("🌪️ MatchesNotifier: Non-critical error hiding swipe in DB: $e");
+        }
+
+        // 5. CRITICAL: Trigger a full reload to ensure the new match is in state before navigation
+        print("🔄 MatchesNotifier: Reloading matches to hydrate new match...");
+        await loadMatches();
       }
       
       return matchId;
     } catch (e) {
-      print("Accept Candidate Error: $e");
+      print("🚨 MatchesNotifier CRITICAL ERROR: $e");
       state = state.copyWith(error: e.toString());
       return null;
     }
@@ -272,6 +293,10 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
   }
 
   Future<void> loadMatches() async {
+    // 1. Trigger permanent SQL cleanup first
+    await _supabaseService.deleteExpiredSwipes();
+    
+    // 2. Load Active Matches (Matches Table)
     final userId = _supabaseService.currentUser?.id;
     if (userId == null) return;
 

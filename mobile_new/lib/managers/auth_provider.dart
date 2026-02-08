@@ -102,6 +102,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final authUser = _supabaseService.currentUser!;
       final user = _mapSupabaseUserToModel(authUser, profileData);
       
+      // Initialize presence tracking once user profile is loaded
+      _supabaseService.initializePresence(user.id);
+      
       state = AuthState(user: user, isLoading: false, sessionUser: authUser);
     }, onError: (error) {
       print('Profile sync error: $error');

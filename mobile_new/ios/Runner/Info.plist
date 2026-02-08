@@ -4,7 +4,7 @@
 	<dict>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
+		<key>CFBundleDisplayName</key>
 		<string>UniHitch</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
@@ -49,7 +49,6 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
-
 		<!-- Deep Linking Configuration -->
 		<key>CFBundleURLTypes</key>
 		<array>
@@ -64,7 +63,6 @@
 				</array>
 			</dict>
 		</array>
-
 		<!-- Universal Links -->
 		<key>com.apple.developer.associated-domains</key>
 		<array>
@@ -72,7 +70,6 @@
 			<string>applinks:rzp.io</string>
 			<string>applinks:rzp.co</string>
 		</array>
-
 		<!-- App Links for Razorpay -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>

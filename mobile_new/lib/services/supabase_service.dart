@@ -732,14 +732,8 @@ class SupabaseService {
         .map((data) => data.isNotEmpty ? data.first : {});
   }
 
-  // Stream for global online count (Database source of truth)
-  Stream<int> get globalOnlineCountStream {
-    return _supabase
-        .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('is_online', true)
-        .map((list) => list.length);
-  }
+  // Stream for global online count (Presence source of truth)
+  Stream<int> get globalOnlineCountStream => onlineCountStream;
 
   // Stream for online users
   Stream<List<Map<String, dynamic>>> getOnlineUsersStream() {

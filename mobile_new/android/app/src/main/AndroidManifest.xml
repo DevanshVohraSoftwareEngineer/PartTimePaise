@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.parttimepaise.mobile_new">
+    package="com.happle.app">
     <!-- Internet permissions for Firebase and network services -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     
     <application
-        android:label="UniHitch"
+        android:label="Happle"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config">
@@ -57,7 +57,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="parttimepaise" />
+                <data android:scheme="happle" />
             </intent-filter>
 
             <!-- Razorpay Payment Callback Handler -->
@@ -66,7 +66,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:host="parttimepaise.page.link"
+                    android:host="happle.page.link"
                     android:scheme="https" />
                 <data
                     android:scheme="@string/rzp_scheme"

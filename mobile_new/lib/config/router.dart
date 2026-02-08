@@ -21,7 +21,7 @@ import '../screens/kaam/my_tasks_screen.dart';
 import '../screens/kaam/posted_tasks_screen.dart';
 import '../screens/kaam/task_feed_screen.dart';
 import '../screens/kaam/task_details_screen.dart';
-import '../parts/animated_splash_screen.dart';
+
 import '../screens/worker/asap_mode_screen.dart';
 import '../screens/legal/about_us_screen.dart';
 import '../screens/legal/contact_us_screen.dart';
@@ -50,14 +50,14 @@ class GoRouterRefreshStream extends ChangeNotifier {
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/splash',
+    initialLocation: '/swipe',
     refreshListenable: GoRouterRefreshStream(ref.watch(authProvider.notifier).stream),
     redirect: (context, state) {
       final authState = ref.read(authProvider);
       final isAuthenticated = authState.sessionUser != null;
       final path = state.matchedLocation;
       
-      if (path == '/splash') return null;
+      // Splash logic removed as we use native splash only
       if (authState.isLoading && authState.user == null) return null;
 
       // Handle Password Recovery Redirection
@@ -78,7 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (context, state) => const AnimatedSplashScreen()),
+      // Native splash handles initial loading, redirecting to /swipe or /login
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
       GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),

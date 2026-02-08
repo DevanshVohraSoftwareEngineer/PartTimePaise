@@ -63,7 +63,7 @@ class CategoriesScreen extends StatelessWidget {
                 const SizedBox(height: 30),
                 _buildViralCard(
                   context,
-                  title: 'AI Meal Scanner',
+                  title: 'Live Calorie Scan',
                   subtitle: 'Intelligent nutrition analysis from photos',
                   icon: Icons.restaurant_rounded,
                   gradient: [const Color(0xFF22C55E), const Color(0xFF10B981)], // Emerald Gradient

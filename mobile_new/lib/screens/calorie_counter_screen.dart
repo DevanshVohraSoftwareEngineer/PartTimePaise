@@ -137,7 +137,7 @@ class _CalorieCounterScreenState extends ConsumerState<CalorieCounterScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'AI MEAL SCANNER', 
+          'LIVE CALORIE SCAN', 
           style: TextStyle(
             fontWeight: FontWeight.w900, 
             letterSpacing: 2, 

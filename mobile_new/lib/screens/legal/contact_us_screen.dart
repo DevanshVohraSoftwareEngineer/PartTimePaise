@@ -7,9 +7,9 @@ class ContactUsScreen extends StatelessWidget {
   Future<void> _launchEmail() async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: 'support@parttimepaise.com',
+      path: 'support@happle.com',
       queryParameters: {
-        'subject': 'Support Request - PartTimePaise App',
+        'subject': 'Support Request - Happle App',
       },
     );
 
@@ -139,7 +139,7 @@ class ContactUsScreen extends StatelessWidget {
               title: 'Customer Support',
               subtitle: '24/7 Support for all your queries',
               onTap: _launchEmail,
-              contactInfo: 'support@parttimepaise.com',
+              contactInfo: 'support@happle.com',
             ),
 
             const SizedBox(height: 16),
@@ -152,16 +152,16 @@ class ContactUsScreen extends StatelessWidget {
               onTap: () async {
                 final Uri emailUri = Uri(
                   scheme: 'mailto',
-                  path: 'business@parttimepaise.com',
+                  path: 'business@happle.com',
                   queryParameters: {
-                    'subject': 'Business Inquiry - PartTimePaise',
+                    'subject': 'Business Inquiry - Happle',
                   },
                 );
                 if (await canLaunchUrl(emailUri)) {
                   await launchUrl(emailUri);
                 }
               },
-              contactInfo: 'business@parttimepaise.com',
+              contactInfo: 'business@happle.com',
             ),
 
             const SizedBox(height: 16),
@@ -196,7 +196,7 @@ class ContactUsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PartTimePaise Technologies Pvt. Ltd.',
+                    'Happle Technologies Pvt. Ltd.',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,

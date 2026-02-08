@@ -37,8 +37,9 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     // ✨ UPDATED: Keep user ACTIVE and ONLINE whenever they are on the Home Feed
     // This ensures they are visible to others for matching/chatting.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Auth provider state update remains if helpful for UI, 
+      // but remote status is now handled globally by PresenceManager/Lifecycle
       ref.read(authProvider.notifier).toggleOnlineStatus(true);
-      ref.read(supabaseServiceProvider).setUserOnline(true);
     });
   }
 

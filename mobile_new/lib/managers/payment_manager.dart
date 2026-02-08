@@ -89,7 +89,7 @@ class PaymentManager {
     final options = {
       'key': 'rzp_test_YOUR_KEY_HERE', // Use test key initially
       'amount': (payment.totalAmount * 100).toInt(), // Razorpay expects paise (INR)
-      'name': 'UniHitch',
+      'name': 'Happle',
       'description': 'Payment for Task: ${payment.taskId.substring(0, 8)}',
       'timeout': 300, // in seconds
       'prefill': {

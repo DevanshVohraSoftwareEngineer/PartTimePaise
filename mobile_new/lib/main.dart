@@ -83,13 +83,8 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         // ALWAYS set online when app is in foreground/being used
         supabaseService.setUserOnline(true);
       } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.inactive) {
-        final authState = ref.read(authProvider);
-        final userPreferredOnline = authState.user?.isOnline ?? false;
-        
-        // Only set offline if they aren't explicitly in ASAP mode
-        if (!userPreferredOnline) {
-          supabaseService.setUserOnline(false);
-        }
+        // STRICT: Set offline when not strictly in foreground
+        supabaseService.setUserOnline(false);
       }
     } catch (e) {
       print('Presence update failed: $e');
@@ -102,7 +97,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp.router(
-      title: 'UniHitch',
+      title: 'Happle',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,

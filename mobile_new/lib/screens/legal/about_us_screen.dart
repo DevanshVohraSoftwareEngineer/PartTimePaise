@@ -31,7 +31,7 @@ class AboutUsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Welcome to PartTimePaise',
+              'Welcome to Happle',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -59,7 +59,7 @@ class AboutUsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'At PartTimePaise, we believe that everyone has skills and talents that can benefit others. Our platform connects individuals seeking flexible work opportunities with people who need reliable help for various tasks. We strive to create a community where part-time work meets real needs, fostering economic growth and personal development.',
+              'At Happle, we believe that everyone has skills and talents that can benefit others. Our platform connects individuals seeking flexible work opportunities with people who need reliable help for various tasks. We strive to create a community where part-time work meets real needs, fostering economic growth and personal development.',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.6,
@@ -75,7 +75,7 @@ class AboutUsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'PartTimePaise is a comprehensive platform that facilitates connections between service providers and clients for various tasks including:',
+              'Happle is a comprehensive platform that facilitates connections between service providers and clients for various tasks including:',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.6,
@@ -141,7 +141,7 @@ class AboutUsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Founded with the vision to revolutionize the gig economy in India, PartTimePaise was created to address the growing need for flexible, reliable, and accessible service solutions. We recognized that many people have valuable skills but lack consistent work opportunities, while others need help with daily tasks but struggle to find trustworthy assistance.',
+              'Founded with the vision to revolutionize the gig economy in India, Happle was created to address the growing need for flexible, reliable, and accessible service solutions. We recognized that many people have valuable skills but lack consistent work opportunities, while others need help with daily tasks but struggle to find trustworthy assistance.',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.6,
@@ -149,7 +149,7 @@ class AboutUsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Today, PartTimePaise serves thousands of users across India, helping them achieve their goals through meaningful connections and economic opportunities.',
+              'Today, Happle serves thousands of users across India, helping them achieve their goals through meaningful connections and economic opportunities.',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.6,

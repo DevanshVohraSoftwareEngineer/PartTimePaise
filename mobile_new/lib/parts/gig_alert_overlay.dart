@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:parttimepaise/config/theme.dart';
-import 'package:parttimepaise/data_types/gig_request.dart';
-import 'package:parttimepaise/data_types/task.dart';
-import 'package:parttimepaise/services/gig_service.dart';
-import 'package:parttimepaise/services/supabase_service.dart';
+import 'package:happle/config/theme.dart';
+import 'package:happle/data_types/gig_request.dart';
+import 'package:happle/data_types/task.dart';
+import 'package:happle/services/gig_service.dart';
+import 'package:happle/services/supabase_service.dart';
 import 'package:geolocator/geolocator.dart'; // Added import
 
 class GigAlertOverlay extends ConsumerStatefulWidget {

@@ -106,12 +106,12 @@ class TermsConditionsScreen extends StatelessWidget {
 
             _buildSection(
               '1. Acceptance of Terms',
-              'By accessing and using the PartTimePaise mobile application ("App") and related services provided by PartTimePaise Technologies Pvt. Ltd. ("we," "our," or "us"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.',
+              'By accessing and using the Happle mobile application ("App") and related services provided by Happle Technologies Pvt. Ltd. ("we," "our," or "us"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.',
             ),
 
             _buildSection(
               '2. Description of Service',
-              'PartTimePaise is a platform that connects individuals seeking part-time work opportunities with potential employers and service providers. Our services include job posting, task management, payment processing, and communication tools.',
+              'Happle is a platform that connects individuals seeking part-time work opportunities with potential employers and service providers. Our services include job posting, task management, payment processing, and communication tools.',
             ),
 
             _buildSection(
@@ -144,7 +144,7 @@ class TermsConditionsScreen extends StatelessWidget {
 
             _buildSection(
               '5. Content and Intellectual Property',
-              'All content, features, and functionality of the App are owned by PartTimePaise Technologies Pvt. Ltd. and are protected by copyright, trademark, and other intellectual property laws.',
+              'All content, features, and functionality of the App are owned by Happle Technologies Pvt. Ltd. and are protected by copyright, trademark, and other intellectual property laws.',
             ),
 
             _buildSubSection(
@@ -177,12 +177,12 @@ class TermsConditionsScreen extends StatelessWidget {
 
             _buildSection(
               '9. Limitation of Liability',
-              'In no event shall PartTimePaise Technologies Pvt. Ltd. be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your use of the service.',
+              'In no event shall Happle Technologies Pvt. Ltd. be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your use of the service.',
             ),
 
             _buildSection(
               '10. Indemnification',
-              'You agree to indemnify and hold harmless PartTimePaise Technologies Pvt. Ltd. from any claims, damages, losses, or expenses arising from your use of the service or violation of these terms.',
+              'You agree to indemnify and hold harmless Happle Technologies Pvt. Ltd. from any claims, damages, losses, or expenses arising from your use of the service or violation of these terms.',
             ),
 
             _buildSection(
@@ -217,14 +217,14 @@ class TermsConditionsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PartTimePaise Technologies Pvt. Ltd.',
+                    'Happle Technologies Pvt. Ltd.',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   SizedBox(height: 8),
-                  Text('Email: legal@parttimepaise.com'),
+                  Text('Email: legal@happle.com'),
                   Text('Phone: +91-1800-XXX-XXXX'),
                   Text('Address: 123 Business District, Tech Park, Sector 15, Gurugram, Haryana - 122001, India'),
                 ],

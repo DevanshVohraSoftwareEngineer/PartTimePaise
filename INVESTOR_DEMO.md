@@ -1,102 +1,66 @@
-# 🚀 PartTimePaise - Student Task Marketplace
+# 🚀 PartTimePaise - Student Task Marketplace (Mobile)
 
 ## 📊 Demo for Investors
 
-**Live Demo:** http://localhost:5178/
+**Mobile Application:** Flutter Android/iOS
+**Backend:** Supabase Architecture
 
 ---
 
 ## 🎯 Project Overview
 
-**PartTimePaise** is a Tinder-style marketplace connecting college students for quick tasks and gigs. Think "Uber for student tasks" - swipe, match, earn!
-
-### 💡 Problem We Solve
-- Students need quick cash (₹200-1000 tasks)
-- Finding reliable help on campus is difficult
-- Traditional freelance platforms are too complex
-- No trust/verification for small local tasks
-
-### ✨ Our Solution
-- **Swipe-based matching** (Tinder UX for tasks)
-- **College-verified users** (trust through proximity)
-- **Escrow payments** (secure transactions)
-- **Real-time chat** (instant communication)
+**PartTimePaise** is a high-fidelity mobile marketplace connecting college students for hyper-local tasks and gigs. "Swipe, Match, Earn" - the Tinder UX applied to student work.
 
 ---
 
 ## 📱 Key Features Implemented
 
-### ✅ Week 1-3 (Completed)
-1. **Authentication System**
-   - Email/password registration
-   - JWT tokens & session management
-   - Password reset flow
-   - College email verification
+### ✅ Phase 1: Authentication & Trust
+- **Secure Onboarding:** Role-based signup (Worker/Client).
+- **Identity Verification:** ML-powered KYC (Aadhaar/PAN OCR & Face Detection).
+- **College Verified:** Restricted to verified college email domains.
 
-2. **Profile Setup**
-   - Multi-step onboarding
-   - Role selection (Client vs Worker)
-   - Skills & rates for workers
-   - Budget preferences for clients
-   - ID verification upload
+### ✅ Phase 2: Hyper-Local Marketplace
+- **Milan Swipe:** Tinder-style gesture interface for task discovery.
+- **Dynamic Tasking:** Post tasks with geo-location, budget, and multi-image support.
+- **Smart Filters:** Filter by distance, category, and student reliability scores.
 
-3. **Swipe & Match System**
-   - Tinder-style task cards
-   - Swipe right to express interest
-   - Auto-matching algorithm
-   - Filter by location, budget, category
-   - Distance calculation
+### ✅ Phase 3: Real-Time Operations
+- **Supabase Real-time:** Instant messaging and status updates via WebSocket channels.
+- **Live Tracking:** Real-time worker tracking during active gigs with PostGIS proximity checks.
+- **Advanced Comm:** Integrated Video/Voice calling via Agora RTC.
 
-### ✅ Week 4 (Partial - 3/7 done)
-4. **Match Detail Page**
-   - Accept/reject matches
-   - Work submission workflow
-   - Revision requests (max 2)
-   - Approve & complete tasks
-
-5. **Real-Time Chat**
-   - Socket.io messaging
-   - Typing indicators
-   - Read receipts
-   - Message history
-
-6. **Client Dashboard**
-   - MyTasks page with filters
-   - View interested workers
-   - Task statistics
-   - Edit/delete functionality
+### ✅ Phase 4: Secure Finance
+- **Escrow System:** Automated payment holding until task approval.
+- **Wallet Integration:** Seamless top-ups via Razorpay and instant withdrawals.
 
 ---
 
 ## 🏗️ Tech Stack
 
-### Frontend
-- **React 18** + **TypeScript**
-- **Vite** (fast build tool)
-- **TailwindCSS v4** (modern styling)
-- **Zustand** (state management)
-- **React Router v7** (navigation)
-- **Framer Motion** (swipe animations)
-- **Socket.io Client** (real-time features)
+### Mobile Frontend
+- **Flutter** (Cross-platform performance)
+- **Riverpod** (Robust state management)
+- **GoRouter** (Deep-link ready navigation)
+- **ML Kit** (On-device machine learning)
 
-### Backend
-- **Node.js** + **Express**
-- **TypeScript**
-- **PostgreSQL** (database)
-- **Drizzle ORM** (type-safe queries)
-- **Redis** (caching & rate limiting)
-- **Socket.io** (WebSocket server)
-- **JWT** (authentication)
-- **Cloudinary** (image uploads)
-- **Nodemailer** (emails)
+### Cloud Backend
+- **Supabase** (BaaS / PostgreSQL)
+- **PostGIS** (Spatial data & location heartbeats)
+- **Edge Functions** (Background logic)
+
+### Infrastructure
+- **Agora** (Real-time Video/Voice)
+- **Razorpay** (Payment Gateway)
+- **Cloudinary** (Asset Management)
 
 ---
 
 ## 📈 Market Opportunity
 
 ### Target Market
-- **Primary:** College students in Tier 1 & 2 cities (20M+ students)
-- **Secondary:** Remote workers, freelancers
+- **Primary:** 20M+ Tier 1 & 2 college students in India.
+- **Niche:** Micro-gigs (₹200-₹1000) ignored by traditional freelance platforms.
 
 ### Revenue Model
 1. **Platform Fee:** 15% commission on completed tasks

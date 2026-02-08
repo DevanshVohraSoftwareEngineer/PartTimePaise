@@ -23,7 +23,20 @@ import '../screens/kaam/task_feed_screen.dart';
 import '../screens/kaam/task_details_screen.dart';
 import '../parts/animated_splash_screen.dart';
 
-// ... other imports ...
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _subscription;
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(

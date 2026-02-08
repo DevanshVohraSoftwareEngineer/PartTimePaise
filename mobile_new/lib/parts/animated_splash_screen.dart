@@ -62,12 +62,7 @@ class _AnimatedSplashScreenState extends ConsumerState<AnimatedSplashScreen>
     // ✨ Magic: Use context.go() for safe, state-aware navigation
     Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
-        final user = ref.read(currentUserProvider);
-        if (user != null && user.role == 'worker') {
-          context.go('/asap-mode');
-        } else {
-          context.go('/swipe'); 
-        }
+        context.go('/swipe'); 
       }
     });
   }

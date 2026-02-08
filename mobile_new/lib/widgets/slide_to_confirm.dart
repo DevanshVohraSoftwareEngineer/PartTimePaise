@@ -83,54 +83,55 @@ class _SlideToConfirmState extends State<SlideToConfirm>
         final maxWidth = constraints.maxWidth;
         final handleOffset = _dragValue * (maxWidth - _handleSize);
 
-        return Container(
-          height: 64,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: widget.baseColor.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Stack(
-            children: [
-              // Background Progress
-              Positioned.fill(
-                child: Row(
-                  children: [
-                    Container(
-                      width: handleOffset + (_handleSize / 2),
-                      decoration: BoxDecoration(
-                        color: widget.confirmColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(32),
+        return GestureDetector(
+          onHorizontalDragUpdate: (details) => _onDragUpdate(details, maxWidth),
+          onHorizontalDragEnd: _onDragEnd,
+          child: Container(
+            height: 64,
+            width: maxWidth, // Ensure full width hit test
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: widget.baseColor.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Stack(
+              children: [
+                // Background Progress
+                Positioned.fill(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: handleOffset + (_handleSize / 2),
+                        decoration: BoxDecoration(
+                          color: widget.confirmColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(32),
+                        ),
                       ),
-                    ),
-                    const Spacer(),
-                  ],
+                      const Spacer(),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Centered Label
-              Center(
-                child: Opacity(
-                  opacity: (1.0 - _dragValue).clamp(0.1, 1.0),
-                  child: Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      letterSpacing: 2.0,
+                // Centered Label
+                Center(
+                  child: Opacity(
+                    opacity: (1.0 - _dragValue).clamp(0.1, 1.0),
+                    child: Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                        letterSpacing: 2.0,
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              // The Draggable Handle
-              Positioned(
-                left: handleOffset,
-                child: GestureDetector(
-                  onHorizontalDragUpdate: (details) => _onDragUpdate(details, maxWidth),
-                  onHorizontalDragEnd: _onDragEnd,
+                // The Draggable Handle
+                Positioned(
+                  left: handleOffset,
                   child: Container(
                     width: _handleSize,
                     height: _handleSize,
@@ -152,8 +153,8 @@ class _SlideToConfirmState extends State<SlideToConfirm>
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

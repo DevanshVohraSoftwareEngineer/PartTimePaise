@@ -160,32 +160,74 @@ class _ASAPNotificationListenerState extends ConsumerState<ASAPNotificationListe
               debugPrint("ASAP_DEBUG: Accept Gig Result: $result");
               String? matchId;
               
-              if (result != null) {
-                if (result is String) {
-                  matchId = result;
-                } else if (result is Map && result.containsKey('id')) {
-                  matchId = result['id'].toString();
-                } else if (result is List && result.isNotEmpty) {
-                   // Some RPCs returning setof return a list
-                   final first = result.first;
-                   if (first is String) matchId = first;
-                   else if (first is Map) matchId = first['id']?.toString();
+                if (result != null) {
+                  if (result is String) {
+                    matchId = result;
+                  } else if (result is Map) {
+                    matchId = result['id']?.toString() ?? result['match_id']?.toString();
+                  } else if (result is List && result.isNotEmpty) {
+                     // Some RPCs returning setof return a list
+                     final first = result.first;
+                     if (first is String) matchId = first;
+                     else if (first is Map) matchId = first['id']?.toString() ?? first['match_id']?.toString();
+                  }
                 }
-              }
-              
-              _removeOverlay();
-              
-              if (mounted && matchId != null) {
-                AppHaptics.heavy();
-                debugPrint("ASAP_DEBUG: Navigating to /chat/$matchId?autofocus=true");
-                // Use global router to ensure navigation works from overlay context
-                ref.read(routerProvider).push('/chat/$matchId?autofocus=true');
-              } else {
-                debugPrint("ASAP_DEBUG: Match ID is null or missing after parsing");
-              }
+
+                // Fallback: If RPC didn't return ID, query matches table
+                if (matchId == null) {
+                   debugPrint("ASAP_DEBUG: RPC returned null ID, querying matches table...");
+                   final currentUser = ref.read(currentUserProvider);
+                   if (currentUser != null) {
+                     try {
+                        final matchData = await supabaseService.client
+                          .from('matches')
+                          .select('id')
+                          .eq('task_id', taskId)
+                          .eq('worker_id', currentUser.id)
+                          .maybeSingle();
+                        
+                        if (matchData != null) {
+                          matchId = matchData['id']?.toString();
+                          debugPrint("ASAP_DEBUG: Found match ID via query: $matchId");
+                        }
+                     } catch (err) {
+                       debugPrint("ASAP_DEBUG: Error querying matches fallback: $err");
+                     }
+                   }
+                }
+                
+                _removeOverlay();
+                
+                if (mounted) {
+                  if (matchId != null) {
+                    AppHaptics.heavy();
+                    debugPrint("ASAP_DEBUG: Navigating to /chat/$matchId?autofocus=true");
+                    // Use global router to ensure navigation works from overlay context
+                    ref.read(routerProvider).push('/chat/$matchId?autofocus=true');
+                  } else {
+                    debugPrint("ASAP_DEBUG: Match ID is null or missing after parsing. Result: $result");
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Gig accepted! Check "My Tasks" for details. (Status: Active)'),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                    // Fallback to matches list
+                    ref.read(routerProvider).push('/matches');
+                  }
+                }
             } catch (e) {
               debugPrint("ASAP_DEBUG: Error accepting gig: $e");
-              rethrow; // Re-throw to be caught by _processAccept for UI feedback
+              // If error is "already accepted" or similar, we should also try to find the match
+              if (e.toString().contains("already") || e.toString().contains("taken")) {
+                 _removeOverlay(); // Dismiss overlay
+                 // Try to navigate anyway
+                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Task was already accepted. Checking...")));
+                 ref.read(routerProvider).push('/matches');
+              } else {
+                rethrow;
+              }
             }
           },
           onReject: () async {

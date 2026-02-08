@@ -583,6 +583,28 @@ class SupabaseService {
         .eq('user_id', workerId);
   }
 
+  /// Permanently removes swipes older than 60 minutes from the database
+  Future<void> deleteExpiredSwipes() async {
+    try {
+      final userId = currentUserId;
+      if (userId == null) return;
+      
+      final now = DateTime.now();
+      final sixtyMinsAgo = now.subtract(const Duration(minutes: 60)).toIso8601String();
+      
+      // Delete ONLY the current user's expired swipes to avoid RLS permission errors
+      await _supabase
+          .from('swipes')
+          .delete()
+          .eq('user_id', userId)
+          .lt('created_at', sixtyMinsAgo);
+          
+      print('🧹 Scoped cleanup: Current user\'s expired swipes removed from SQL');
+    } catch (e) {
+      print('❌ Error during SQL cleanup of expired swipes: $e');
+    }
+  }
+
   // Bids Real-time
   Stream<List<Map<String, dynamic>>> getBidsStream(String taskId) {
     return _supabase

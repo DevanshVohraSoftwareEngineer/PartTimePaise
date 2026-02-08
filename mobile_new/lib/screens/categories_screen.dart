@@ -65,32 +65,32 @@ class CategoriesScreen extends StatelessWidget {
                   context,
                   title: 'AI Meal Scanner',
                   subtitle: 'Intelligent nutrition analysis from photos',
-                  icon: Icons.qr_code_scanner_rounded, // Black scanner symbol
-                  gradient: isDark ? [Colors.white24, Colors.white10] : [Colors.black, Color(0xFF2C2C2E)],
+                  icon: Icons.restaurant_rounded,
+                  gradient: [const Color(0xFF22C55E), const Color(0xFF10B981)], // Emerald Gradient
                   isDark: isDark,
                   onTap: () {
                     context.push('/calorie-counter');
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildViralCard(
                   context,
                   title: 'Campus Dating',
-                  subtitle: 'Discovery meaningful connections',
-                  icon: Icons.favorite, // Black shining heart
-                  gradient: isDark ? [Colors.white24, Colors.white10] : [Colors.black, Color(0xFF2C2C2E)],
+                  subtitle: 'Discover meaningful connections',
+                  icon: Icons.favorite_rounded,
+                  gradient: [const Color(0xFFF43F5E), const Color(0xFFE11D48)], // Rose Gradient
                   isDark: isDark,
                   onTap: () {
                     _showComingSoon(context, 'Quick Dating');
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildViralCard(
                   context,
                   title: 'Elite Events',
                   subtitle: 'Premium campus access & networking',
-                  icon: Icons.calendar_month_rounded, // Calendar icon
-                  gradient: isDark ? [Colors.white24, Colors.white10] : [Colors.black, Color(0xFF2C2C2E)],
+                  icon: Icons.auto_awesome_rounded,
+                  gradient: [const Color(0xFFF59E0B), const Color(0xFFD97706)], // Amber Gradient
                   isDark: isDark,
                   onTap: () {
                     _showComingSoon(context, 'Campus Events');
@@ -159,29 +159,27 @@ class CategoriesScreen extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.12) : Colors.black, // Solid black in light mode
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.white24,
-                      width: 1,
+                    gradient: LinearGradient(
+                      colors: gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradient.first.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Icon(
                     icon, 
-                    color: Colors.white, // White icon on black background
+                    color: Colors.white,
                     size: 28
-                  ),
-                ),
-                // Subtle decorative background icon matching theme
-                Positioned(
-                  right: -5,
-                  bottom: -5,
-                  child: Icon(
-                    Icons.bolt_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
                   ),
                 ),
               ],

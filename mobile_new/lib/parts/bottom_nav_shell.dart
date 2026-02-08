@@ -72,8 +72,9 @@ class ScaffoldWithNavBar extends StatelessWidget {
   }
 
   NavigationDestination _buildCustomHubItem(bool isDark) {
-    final bool isSelected = navigationShell.currentIndex == 1;
+    // Unused: final bool isSelected = navigationShell.currentIndex == 1;
     return NavigationDestination(
+      label: 'Hub',
       icon: Container(
         width: 32,
         height: 32,
@@ -85,10 +86,10 @@ class ScaffoldWithNavBar extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: Icon(
-          Icons.lightbulb_rounded,
+        child: const Icon(
+          Icons.star_border, // Unselected Star
           color: Colors.white,
-          size: 18,
+          size: 20,
         ),
       ),
       selectedIcon: Container(
@@ -106,12 +107,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
           ],
         ),
         child: Icon(
-          Icons.lightbulb_rounded,
+          Icons.star, // Filled Star
           color: isDark ? Colors.black : Colors.white,
-          size: 18,
+          size: 20,
         ),
       ),
-      label: 'Hub',
     );
   }
 }

@@ -103,19 +103,26 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     final isOnline = currentUser?.isOnline ?? false;
     final tasksState = ref.watch(tasksProvider);
     final swipedIds = ref.watch(swipedTaskIdsProvider);
-    
-    // ✨ THE MARKETPLACE: Show all available tasks (Regular/Today Gigs)
-    // Magic Fix: Filter out ASAP tasks because they are handled strictly via the "Direct Request" Overlay system
-    final allMarketplaceTasks = tasksState.tasks.where((t) => 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Filter tasks by urgency
+    final todayTasks = tasksState.tasks.where((t) => 
       (t.status == 'open' || t.status == 'broadcasting') &&
       t.clientId != currentUser?.id &&
       !swipedIds.contains(t.id) &&
       t.urgency != 'asap'
     ).toList();
 
-    // Sorting by proximity
-    if (_currentPosition != null) {
-      allMarketplaceTasks.sort((a, b) {
+    final asapTasks = tasksState.tasks.where((t) => 
+      (t.status == 'open' || t.status == 'broadcasting') &&
+      t.clientId != currentUser?.id &&
+      !swipedIds.contains(t.id) &&
+      t.urgency == 'asap' // Explicitly fetch ASAP tasks for this tab
+    ).toList();
+
+    // Sorting logic (same for both)
+    int sortByProximity(Task a, Task b) {
+        if (_currentPosition == null) return 0;
         if (a.pickupLat == null || a.pickupLng == null) return 1;
         if (b.pickupLat == null || b.pickupLng == null) return -1;
         
@@ -128,90 +135,101 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
           b.pickupLat!, b.pickupLng!
         );
         return distA.compareTo(distB);
-      });
     }
 
-    // Filter out only those that are NOT already swiped (persisted history)
-    final swipedTaskIds = ref.watch(swipedTaskIdsProvider);
-    
-    final marketplaceTasks = allMarketplaceTasks.where((t) => 
-      !swipedTaskIds.contains(t.id)
-    ).toList();
+    if (_currentPosition != null) {
+      todayTasks.sort(sortByProximity);
+      asapTasks.sort(sortByProximity);
+    }
 
-    return Scaffold(
-      body: FuturisticBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildAppBar(isOnline),
-              if (currentUser != null) _buildWalletHeader(currentUser),
-              
-              const Spacer(),
-
-              // HYBRID UI: Tinder Swiper overlaid on Radar Map
-              Expanded(
-                flex: 10,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Layer 1: Radar Map Background
-                    _buildRadarMap(isOnline),
-
-                    // Layer 2: Scrollable Marketplace List
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: marketplaceTasks.isEmpty 
-                        ? (isOnline ? const SizedBox.shrink() : _buildEmptyState())
-                        : ListView.builder(
-                            controller: _scrollController,
-                            itemCount: marketplaceTasks.length,
-                            padding: const EdgeInsets.symmetric(vertical: 24),
-                            itemBuilder: (context, index) {
-                              final task = marketplaceTasks[index];
-                              return TaskItemBar(
-                                task: task,
-                                onLike: () => _onAction(task, true),
-                                onNope: () => _onAction(task, false),
-                              );
-                            },
-                          ),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        body: FuturisticBackground(
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(isOnline),
+                
+                // Tab Bar Section
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  
-                    // Layer 3: ASAP Scanning UI (Subtle Indicator - NO OVERLAY)
-                    if (isOnline && marketplaceTasks.isEmpty)
-                      IgnorePointer(
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Small, subtle indicators only if truly empty
-                              Icon(Icons.radar, size: 48, color: AppTheme.electricMedium.withOpacity(0.3)),
-                              const SizedBox(height: 16),
-                              Text(
-                                'SCANNING FOR ASAP GIGS',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).brightness == Brightness.dark 
-                                      ? AppTheme.electricMedium.withOpacity(0.5) 
-                                      : Colors.black.withOpacity(0.4),
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    child: TabBar(
+                      indicator: BoxDecoration(
+                         color: isDark ? Colors.white : Colors.black,
+                         borderRadius: BorderRadius.circular(8),
                       ),
-
-                    if (isOnline) const SizedBox.shrink(),
-                  ],
+                      labelColor: isDark ? Colors.black : Colors.white,
+                      unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1),
+                      tabs: const [
+                        Tab(text: 'TODAY'),
+                        Tab(text: 'ASAP'),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              
-              _buildFooter(isOnline),
-            ],
+
+                if (currentUser != null) _buildWalletHeader(currentUser),
+                
+                // Content View
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // TODAY GIGS TAB
+                      _buildTaskList(todayTasks, isOnline, "NO TODAY GIGS", "Check back later for scheduled tasks."),
+
+                      // ASAP GIGS TAB (Replaces Overlay Mode)
+                      _buildTaskList(asapTasks, isOnline, "NO ASAP GIGS", "Campus is quiet right now."),
+                    ],
+                  ),
+                ),
+                
+                _buildFooter(isOnline),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTaskList(List<Task> tasks, bool isOnline, String emptyTitle, String emptyMsg) {
+    if (tasks.isEmpty) {
+      return Center(
+         child: _buildEmptyState(emptyTitle, emptyMsg),
+      );
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+         // Background Map for context
+         _buildRadarMap(isOnline),
+         
+         // The List
+         Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: ListView.builder(
+              itemCount: tasks.length,
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              itemBuilder: (context, index) {
+                final task = tasks[index];
+                return TaskItemBar(
+                  task: task,
+                  onLike: () => _onAction(task, true),
+                  onNope: () => _onAction(task, false),
+                );
+              },
+            ),
+         ),
+      ],
     );
   }
 
@@ -267,7 +285,7 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
           ),
           const Spacer(),
           
-          // ✨ Magic: Reload/Refresh
+          // Refresh Button
           IconButton(
             onPressed: () {
               ref.read(tasksProvider.notifier).loadTasks();
@@ -287,7 +305,7 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
             ),
           ),
 
-          // ✨ Magic: Thunder/Money Theme Toggle
+          // Theme Toggle
           IconButton(
             onPressed: () {
               ref.read(themeSettingsProvider.notifier).toggleTheme();
@@ -301,36 +319,36 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
               size: 20,
             ),
           ),
-
-          const SizedBox(width: 8),
-
-          GestureDetector(
-            onTap: () {
-              context.go('/asap-mode');
-              AppHaptics.medium();
-            },
-            child: GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              borderColor: AppTheme.electricMedium.withOpacity(0.3),
-              child: Row(
-                children: [
-                  _buildScanningDot(),
-                  const SizedBox(width: 8),
-                  Text(
-                    'ASAP',
-                    style: TextStyle(
-                      fontSize: 12, 
-                      fontWeight: FontWeight.w900, 
-                      letterSpacing: 1,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // User requested removal of ASAP button here
         ],
       ),
+    );
+  }
+
+  Widget _buildEmptyState(String title, String message) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.done_all_rounded, color: isDark ? Colors.white24 : Colors.black12, size: 64),
+        const SizedBox(height: 16),
+        Text(
+          title, 
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1,
+            color: isDark ? Colors.white : Colors.black,
+          )
+        ),
+        const SizedBox(height: 8),
+        Text(
+          message, 
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: isDark ? Colors.white38 : Colors.black38,
+            fontWeight: FontWeight.w600,
+          )
+        ),
+      ],
     );
   }
 
@@ -402,17 +420,6 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
         zoomControlsEnabled: false,
         mapType: MapType.normal,
         markers: _buildNearbyMarkers(ref),
-        circles: {
-          if (isOnline && _currentPosition != null)
-            Circle(
-              circleId: const CircleId('radar_circle'),
-              center: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-              radius: 1500,
-              fillColor: AppTheme.electricMedium.withOpacity(0.05),
-              strokeColor: AppTheme.electricMedium.withOpacity(0.1),
-              strokeWidth: 1,
-            ),
-        },
       ),
     );
   }
@@ -445,70 +452,15 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
             title: task.title,
             snippet: '₹${task.budget.toInt()} • Elite Campus',
           ),
-          onTap: () {
-            // We could show a bottom sheet here
-            AppHaptics.light();
-          },
         ));
       }
     }
 
     return markers;
   }
-
-  Widget _buildEmptyState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.done_all_rounded, color: isDark ? Colors.white24 : Colors.black12, size: 64),
-        const SizedBox(height: 16),
-        Text(
-          'ALL CAUGHT UP', 
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: -1,
-            color: isDark ? Colors.white : Colors.black,
-          )
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'No campus gigs nearby right now.', 
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: isDark ? Colors.white38 : Colors.black38,
-            fontWeight: FontWeight.w600,
-          )
-        ),
-      ],
-    );
-  }
-
+  
   Widget _buildFooter(bool isOnline) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: GlassCard(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, color: isDark ? Colors.white70 : Colors.black87, size: 16),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                isOnline 
-                  ? 'ASAP MODE: Active standby for elite campus events.'
-                  : 'DISCOVER: Explore premium gigs and university services.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                  letterSpacing: -0.2,
-                  color: isDark ? Colors.white70 : Colors.black87,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+      // Unused or simplified for this view
+      return const SizedBox.shrink();
   }
 }

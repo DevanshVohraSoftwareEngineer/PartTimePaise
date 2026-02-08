@@ -147,6 +147,12 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
     final createdAt = DateTime.parse(candidate['created_at']);
     final expiry = createdAt.add(const Duration(minutes: 60));
     final remaining = expiry.difference(DateTime.now());
+    
+    // SAFETY: If already expired, don't show anyway
+    if (remaining.isNegative) {
+      return const SizedBox.shrink();
+    }
+
     final minutes = remaining.inMinutes;
     final seconds = remaining.inSeconds % 60;
     final timeStr = "${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
@@ -299,6 +305,14 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
           context.push('/matches/$success/chat?autofocus=true');
         }
       });
+    } else if (mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not accept match. Please try again or check connection.'),
+          backgroundColor: AppTheme.nopeRed,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

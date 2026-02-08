@@ -958,18 +958,14 @@ alter table meal_scans enable row level security;
 
 
 
+drop policy if exists "Users can view their own meal scans if exists" on meal_scans;
 create policy "Users can view their own meal scans if exists"
-
   on meal_scans for select
-
   using (auth.uid() = user_id);
 
-
-
+drop policy if exists "Users can insert their own meal scans if exists" on meal_scans;
 create policy "Users can insert their own meal scans if exists"
-
   on meal_scans for insert
-
   with check (auth.uid() = user_id);
 
 

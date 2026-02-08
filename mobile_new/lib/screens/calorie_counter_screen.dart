@@ -311,9 +311,14 @@ class _CalorieCounterScreenState extends ConsumerState<CalorieCounterScreen> {
             children: [
               Icon(isFood ? Icons.verified : Icons.info_outline, color: AppTheme.cyanAccent, size: 16),
               const SizedBox(width: 8),
-              Text(
-                (_analysisResults!['item'] ?? 'Analyzing...').toString().toUpperCase(),
-                style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: shadows),
+              Expanded(
+                child: Text(
+                  (_analysisResults!['item'] ?? 'Analyzing...').toString().toUpperCase(),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: shadows),
+                ),
               ),
             ],
           ),

@@ -30,6 +30,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode(); // Added FocusNode for reliable autofocus
   Timer? _typingTimer;
   Timer? _countdownTimer;
   Duration _remainingTime = const Duration(hours: 24);
@@ -38,6 +39,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     _startCountdown();
+    
+    // Updated: Handle autofocus reliably with a delay to account for page transitions
+    if (widget.autofocus) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   void _startCountdown() {
@@ -71,6 +81,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose(); // Dispose FocusNode
     _typingTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
@@ -271,10 +282,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chatState = ref.watch(chatProvider(widget.matchId));
     final currentUser = ref.watch(currentUserProvider);
     final matchesState = ref.watch(matchesProvider);
-    
     final matchIndex = matchesState.matches.indexWhere((m) => m.id == widget.matchId);
+    
+    // ✨ ROBUST FALLBACK: If match isn't in state (e.g. view error or sync lag),
+    // we show the loading state but don't hang forever - loadMessages logic will
+    // still attempt to fetch the actual messages.
     if (matchIndex == -1) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      if (matchesState.isLoading) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      // If we're not loading but still miss the match, the match might be "orphaned"
+      // or the SQL view is broken. Show a better error or a minimal header.
+      return _buildMinimalOrphanedChat(context);
     }
     
     final match = matchesState.matches[matchIndex];
@@ -533,7 +552,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               child: TextField(
                 controller: _messageController,
-                autofocus: widget.autofocus,
+                focusNode: _focusNode,
+                autofocus: false, // Handled manually in initState
                 style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(
                   hintText: 'Message...',
@@ -580,5 +600,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
-}
 
+  Widget _buildMinimalOrphanedChat(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: isDark ? Colors.black : Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black),
+          onPressed: () => context.pop(),
+        ),
+        title: Text("Chat", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: Center(child: Text("Loading messages robustly...", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)))),
+          _buildPremiumInput(),
+        ],
+      ),
+    );
+  }
+}

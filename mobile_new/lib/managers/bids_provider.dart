@@ -62,22 +62,12 @@ class TaskBidsNotifier extends StateNotifier<TaskBidsState> {
   Future<String?> acceptBid(String bidId, Bid bid) async {
     try {
       state = state.copyWith(isLoading: true, error: null);
-      // 1. Update Bid Status
-      await _supabaseService.updateBidStatus(bidId, 'accepted');
       
-      // 2. Update Task Status & Assign Worker
-      await _supabaseService.updateTask(_taskId, {
-        'status': 'assigned',
-        'worker_id': bid.workerId,
-      });
-
-      // 3. Create a match record (Milan logic)
-      String? matchId;
-      try {
-        matchId = await _supabaseService.createMatch(_taskId, bid.workerId);
-      } catch (e) {
-        print('Warning: Match record creation failed: $e');
-      }
+      // ✨ UNIFIED SECURE MATCH: Uses the same logic as ASAP instant-match
+      final matchId = await _supabaseService.createMatch(_taskId, bid.workerId);
+      
+      // Also update bid status for UI consistency in the bids table
+      await _supabaseService.updateBidStatus(bidId, 'accepted');
 
       state = state.copyWith(isLoading: false);
       return matchId;

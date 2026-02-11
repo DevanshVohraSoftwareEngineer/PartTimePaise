@@ -1,16 +1,21 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../managers/theme_settings_provider.dart';
 import '../../managers/nearby_users_provider.dart';
+import '../../managers/matches_provider.dart'; // Added
+import 'package:cached_network_image/cached_network_image.dart'; // Added
 import '../../services/supabase_service.dart';
 import '../../parts/task_item_bar.dart';
 import '../../widgets/futuristic_background.dart';
 import '../../widgets/glass_card.dart';
 import '../../utils/haptics.dart';
+import '../../utils/distance_calculator.dart';
 import '../../data_types/task.dart';
 import '../../managers/auth_provider.dart';
 import '../../managers/tasks_provider.dart';
@@ -47,13 +52,13 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 50, // Only update if moved 50m
+        distanceFilter: 5, // ✨ RADAR MODE: Update every 5m for smooth distance changes
       ),
     ).listen((pos) {
       if (mounted) {
         // Only trigger update if moved significantly to avoid build loops
         if (_currentPosition == null || 
-            Geolocator.distanceBetween(_currentPosition!.latitude, _currentPosition!.longitude, pos.latitude, pos.longitude) > 10) {
+            Geolocator.distanceBetween(_currentPosition!.latitude, _currentPosition!.longitude, pos.latitude, pos.longitude) > 5) {
           setState(() => _currentPosition = pos);
           // ref.read(stabilizedLocationProvider.notifier).state = pos; // Commented out if not defined
           // ref.read(presenceProvider.notifier).updateLocation(pos.latitude, pos.longitude); // Commented out if not defined or mocked
@@ -62,13 +67,16 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     });
   }
 
-  void _onAction(Task task, bool liked) {
+  void _onAction(Task task, bool liked) async {
     // Optimistic UI update for snappy feel, especially for debug/offline
-    ref.read(swipedTaskIdsProvider.notifier).addSwipedIdLocally(task.id);
     
     if (liked) {
+      // ✨ REMOVED: Mandatory Verification Photo for Worker Interest
+      // Now acts as an instant accept/interest
+      ref.read(swipedTaskIdsProvider.notifier).addSwipedIdLocally(task.id);
       _handleLike(task);
     } else {
+      ref.read(swipedTaskIdsProvider.notifier).addSwipedIdLocally(task.id);
       _handleNope(task);
     }
   }
@@ -76,7 +84,17 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   Future<void> _handleLike(Task task) async {
     AppHaptics.light();
     try {
-      await ref.read(supabaseServiceProvider).createSwipe(task.id, 'right');
+      final isAsap = task.urgency == 'asap';
+      final matchId = await ref.read(supabaseServiceProvider).createSwipe(
+        task.id, 
+        'right',
+        isAsap: isAsap,
+      );
+
+      // ✨ MAGIC: If it's an ASAP task and match was created, go to Chat!
+      if (isAsap && matchId != null && mounted) {
+        context.push('/matches/$matchId/chat?autofocus=true');
+      }
     } catch (e) {
       print('Swipe error: $e');
     }
@@ -102,49 +120,68 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
     final isOnline = currentUser?.isOnline ?? false;
+    // Calculate total unread count (unread messages + new interested candidates)
+    final matchesState = ref.watch(matchesProvider);
+    final unreadCount = matchesState.matches.fold(0, (sum, m) => sum + m.unreadCount) + matchesState.candidates.length;
     final tasksState = ref.watch(tasksProvider);
     final swipedIds = ref.watch(swipedTaskIdsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Filter tasks by urgency
-    final todayTasks = tasksState.tasks.where((t) => 
-      (t.status == 'open' || t.status == 'broadcasting') &&
-      t.clientId != currentUser?.id &&
-      !swipedIds.contains(t.id) &&
-      t.urgency != 'asap'
-    ).toList();
-
-    final asapTasks = tasksState.tasks.where((t) => 
-      (t.status == 'open' || t.status == 'broadcasting') &&
-      t.clientId != currentUser?.id &&
-      !swipedIds.contains(t.id) &&
-      t.urgency == 'asap' // Explicitly fetch ASAP tasks for this tab
-    ).toList();
-
-    // Sorting logic (same for both)
-    int sortByProximity(Task a, Task b) {
-        if (_currentPosition == null) return 0;
-        if (a.pickupLat == null || a.pickupLng == null) return 1;
-        if (b.pickupLat == null || b.pickupLng == null) return -1;
-        
-        final distA = Geolocator.distanceBetween(
-          _currentPosition!.latitude, _currentPosition!.longitude, 
-          a.pickupLat!, a.pickupLng!
-        );
-        final distB = Geolocator.distanceBetween(
-          _currentPosition!.latitude, _currentPosition!.longitude, 
-          b.pickupLat!, b.pickupLng!
-        );
-        return distA.compareTo(distB);
+    List<Task> prepareTasks(List<Task> tasks) {
+      if (_currentPosition == null) return tasks;
+      
+      return tasks.map((t) {
+        if (t.pickupLat != null && t.pickupLng != null) {
+          final dist = Geolocator.distanceBetween(
+            _currentPosition!.latitude, 
+            _currentPosition!.longitude, 
+            t.pickupLat!, 
+            t.pickupLng!
+          );
+          return t.copyWith(distanceMeters: dist);
+        }
+        return t;
+      }).toList();
     }
 
+    // Sorting logic 
+    int sortByProximity(Task a, Task b) {
+        if (a.distanceMeters == null) return 1;
+        if (b.distanceMeters == null) return -1;
+        return a.distanceMeters!.compareTo(b.distanceMeters!);
+    }
+
+    final freelanceTasks = prepareTasks(tasksState.tasks.where((t) => 
+      (t.status == 'open' || t.status == 'broadcasting') &&
+      t.clientId != currentUser?.id &&
+      !swipedIds.contains(t.id) &&
+      t.urgency != 'asap' &&
+      t.category != 'Buy/Sell (Student OLX)'
+    ).toList());
+
+    final asapTasks = prepareTasks(tasksState.tasks.where((t) => 
+      (t.status == 'open' || t.status == 'broadcasting') &&
+      t.clientId != currentUser?.id &&
+      !swipedIds.contains(t.id) &&
+      t.urgency == 'asap' &&
+      t.category != 'Buy/Sell (Student OLX)'
+    ).toList());
+
+    final buySellTasks = prepareTasks(tasksState.tasks.where((t) => 
+      (t.status == 'open' || t.status == 'broadcasting') &&
+      t.clientId != currentUser?.id &&
+      !swipedIds.contains(t.id) &&
+      t.category == 'Buy/Sell (Student OLX)'
+    ).toList());
+
     if (_currentPosition != null) {
-      todayTasks.sort(sortByProximity);
+      freelanceTasks.sort(sortByProximity);
       asapTasks.sort(sortByProximity);
+      buySellTasks.sort(sortByProximity);
     }
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         body: FuturisticBackground(
           child: SafeArea(
@@ -168,34 +205,69 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                       ),
                       labelColor: isDark ? Colors.black : Colors.white,
                       unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1),
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
                       tabs: const [
-                        Tab(text: 'TODAY'),
+                        Tab(text: 'FREELANCE'),
                         Tab(text: 'ASAP'),
+                        Tab(text: 'BUY/SELL'),
                       ],
                     ),
                   ),
                 ),
 
-                if (currentUser != null) _buildWalletHeader(currentUser),
+                _buildCalorieScanBar(),
                 
                 // Content View
                 Expanded(
                   child: TabBarView(
                     children: [
-                      // TODAY GIGS TAB
-                      _buildTaskList(todayTasks, isOnline, "NO TODAY GIGS", "Check back later for scheduled tasks."),
+                      // FREELANCE GIGS TAB
+                      _buildTaskList(freelanceTasks, isOnline, "NO FREELANCE GIGS", "Check back later for tasks."),
 
-                      // ASAP GIGS TAB (Replaces Overlay Mode)
+                      // ASAP GIGS TAB
                       _buildTaskList(asapTasks, isOnline, "NO ASAP GIGS", "Campus is quiet right now."),
+
+                      // BUY/SELL TAB
+                      _buildTaskList(buySellTasks, isOnline, "NO ITEMS FOR SALE", "Students haven't posted anything to sell yet."),
                     ],
                   ),
                 ),
+                
                 
                 _buildFooter(isOnline),
               ],
             ),
           ),
+        ),
+        // ✨ Chat Floating Action Button
+        floatingActionButton: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            FloatingActionButton(
+              onPressed: () => context.push('/matches'),
+              backgroundColor: isDark ? Colors.white : Colors.black,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.chat_bubble_outline_rounded, size: 28),
+            ),
+            if (unreadCount > 0)
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF3B30),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -224,6 +296,7 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
                 final task = tasks[index];
                 return TaskItemBar(
                   task: task,
+                  currentPosition: _currentPosition,
                   onLike: () => _onAction(task, true),
                   onNope: () => _onAction(task, false),
                 );
@@ -286,6 +359,31 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
           ),
           const Spacer(),
           
+          // Profile Avatar (Navigates to Profile)
+          GestureDetector(
+             onTap: () => context.push('/profile'),
+             child: Container(
+               width: 38,
+               height: 38,
+               margin: const EdgeInsets.only(right: 12),
+               decoration: BoxDecoration(
+                 shape: BoxShape.circle,
+                 border: Border.all(color: isDark ? Colors.white24 : Colors.black12, width: 1.5),
+               ),
+               child: ClipRRect(
+                 borderRadius: BorderRadius.circular(100),
+                 child: (ref.watch(currentUserProvider)?.selfieUrl ?? ref.watch(currentUserProvider)?.avatarUrl) != null
+                     ? CachedNetworkImage(
+                         imageUrl: (ref.watch(currentUserProvider)?.selfieUrl ?? ref.watch(currentUserProvider)!.avatarUrl)!,
+                         fit: BoxFit.cover,
+                         placeholder: (context, url) => Container(color: Colors.grey.shade200),
+                         errorWidget: (context, url, error) => const Icon(Icons.person, size: 20),
+                       )
+                     : const Icon(Icons.person, size: 20, color: Colors.grey),
+               ),
+             ),
+          ),
+
           // Refresh Button
           IconButton(
             onPressed: () {
@@ -367,40 +465,77 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
     );
   }
 
-  Widget _buildWalletHeader(dynamic user) {
+  Widget _buildCalorieScanBar() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Icon(Icons.account_balance_wallet_outlined, color: isDark ? Colors.white : Colors.black, size: 24),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'WALLET BALANCE', 
-                  style: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38, 
-                    fontSize: 10, 
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  )
-                ),
-                Text(
-                  '₹${user.walletBalance?.toStringAsFixed(2) ?? '0.00'}', 
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: isDark ? Colors.white : Colors.black,
+      child: InkWell(
+        onTap: () => context.push('/calorie-counter'),
+        borderRadius: BorderRadius.circular(24),
+        child: GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF22C55E), Color(0xFF10B981)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF22C55E).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+                child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'LIVE CALORIE SCAN', 
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black, 
+                            fontSize: 14, 
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          )
+                        ),
+                        const SizedBox(width: 6),
+                        _buildScanningDot(),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'AI Intelligent Nutrition Analysis', 
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white38 : Colors.black38,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded, 
+                color: isDark ? Colors.white24 : Colors.black26, 
+                size: 14
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -436,7 +571,10 @@ class _SwipeFeedScreenState extends ConsumerState<SwipeFeedScreen> {
         position: LatLng(user.currentLat ?? 0.0, user.currentLng ?? 0.0),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
         alpha: 0.6,
-        infoWindow: InfoWindow(title: user.name),
+        infoWindow: InfoWindow(
+          title: user.name,
+          snippet: '${user.college ?? 'Campus'} • ${user.distanceMeters != null ? DistanceCalculator.formatDistance(user.distanceMeters!) : 'Nearby'}',
+        ),
       ));
     }
 

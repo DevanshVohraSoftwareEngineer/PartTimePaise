@@ -114,32 +114,51 @@ GRANT EXECUTE ON FUNCTION cleanup_chats() TO authenticated;
 -- PART 4: MATCH FLOW FIX (Bridge Swipes -> Bids + Instant Match)
 -- --------------------------------------------------------
 
--- 1. Trigger Function to sync Swipes -> Bids
+-- 1. Schema Alignment: Add missing columns to Swipes and Bids
+ALTER TABLE swipes ADD COLUMN IF NOT EXISTS verification_photo_url TEXT;
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS worker_name TEXT;
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS worker_face_url TEXT;
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS worker_id_card_url TEXT;
+
+-- 2. Add Unique Constraint to Bids for ON CONFLICT support
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bids_task_id_worker_id_key') THEN 
+        ALTER TABLE bids ADD CONSTRAINT bids_task_id_worker_id_key UNIQUE (task_id, worker_id); 
+    END IF; 
+END $$;
+
+-- 3. Trigger Function to sync Swipes -> Bids
 CREATE OR REPLACE FUNCTION sync_swipe_to_bid()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.direction = 'right' THEN
-    INSERT INTO bids (task_id, worker_id, amount, message, status, worker_face_url)
+    INSERT INTO bids (task_id, worker_id, amount, message, status, worker_name, worker_face_url, worker_id_card_url)
     SELECT 
       NEW.task_id, 
       NEW.user_id, 
-      (SELECT budget FROM tasks WHERE id = NEW.task_id),
+      COALESCE((SELECT budget FROM tasks WHERE id = NEW.task_id), 0),
       'Interested for this gig!',
       'pending',
-      (SELECT selfie_url FROM profiles WHERE id = NEW.user_id)
-    ON CONFLICT (task_id, worker_id) DO NOTHING;
+      (SELECT name FROM profiles WHERE id = NEW.user_id),
+      (SELECT selfie_url FROM profiles WHERE id = NEW.user_id),
+      (SELECT id_card_url FROM profiles WHERE id = NEW.user_id)
+    ON CONFLICT (task_id, worker_id) DO UPDATE SET
+      worker_name = EXCLUDED.worker_name,
+      worker_face_url = EXCLUDED.worker_face_url,
+      worker_id_card_url = EXCLUDED.worker_id_card_url;
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. Attach Trigger
+-- 4. Attach Trigger
 DROP TRIGGER IF EXISTS on_swipe_right ON swipes;
 CREATE TRIGGER on_swipe_right
 AFTER INSERT OR UPDATE ON swipes
 FOR EACH ROW EXECUTE FUNCTION sync_swipe_to_bid();
 
--- 3. Secure Match RPC (Used for Instant Match & Manual Accept)
+-- 5. Secure Match RPC (Used for Instant Match & Manual Accept)
 CREATE OR REPLACE FUNCTION create_match_secure(p_task_id UUID, p_worker_id UUID)
 RETURNS UUID AS $$
 DECLARE

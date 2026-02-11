@@ -13,7 +13,8 @@ import '../../utils/validators.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/countdown_timer.dart';
 import '../../helpers/content_filter.dart';
-import 'package:flutter/foundation.dart'; // Added
+import 'package:flutter/foundation.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
 
 class TaskDetailsScreen extends ConsumerStatefulWidget {
   final String taskId;
@@ -474,10 +475,15 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
               children: [
                 CircleAvatar(
                   backgroundColor: AppTheme.likeGreen.withOpacity(0.2),
-                  child: Text(
-                    bid.workerName.isNotEmpty ? bid.workerName[0].toUpperCase() : 'W',
-                    style: const TextStyle(color: AppTheme.likeGreen),
-                  ),
+                  backgroundImage: (bid.workerFaceUrl != null && bid.workerFaceUrl!.isNotEmpty) 
+                    ? CachedNetworkImageProvider(bid.workerFaceUrl!) 
+                    : null,
+                  child: (bid.workerFaceUrl == null || bid.workerFaceUrl!.isEmpty)
+                    ? Text(
+                        bid.workerName.isNotEmpty ? bid.workerName[0].toUpperCase() : 'W',
+                        style: const TextStyle(color: AppTheme.likeGreen),
+                      )
+                    : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -558,8 +564,8 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                                 height: 80,
                                 width: double.infinity,
                                 color: Colors.grey.shade200,
-                                child: bid.workerFaceUrl != null 
-                                  ? Image.network(bid.workerFaceUrl!, fit: BoxFit.cover)
+                                child: (bid.workerFaceUrl != null && bid.workerFaceUrl!.isNotEmpty) 
+                                  ? CachedNetworkImage(imageUrl: bid.workerFaceUrl!, fit: BoxFit.cover)
                                   : Icon(Icons.face, color: Colors.grey.shade400),
                               ),
                             ),
@@ -579,8 +585,8 @@ class _TaskDetailsScreenState extends ConsumerState<TaskDetailsScreen> {
                                 height: 80,
                                 width: double.infinity,
                                 color: Colors.grey.shade200,
-                                child: bid.workerIdCardUrl != null
-                                  ? Image.network(bid.workerIdCardUrl!, fit: BoxFit.cover)
+                                child: (bid.workerIdCardUrl != null && bid.workerIdCardUrl!.isNotEmpty)
+                                  ? CachedNetworkImage(imageUrl: bid.workerIdCardUrl!, fit: BoxFit.cover)
                                   : Icon(Icons.badge, color: Colors.grey.shade400),
                               ),
                             ),

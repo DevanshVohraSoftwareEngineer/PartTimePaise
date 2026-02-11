@@ -11,7 +11,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_windows
   geolocator_windows
   iris_method_channel
+  local_auth_windows
   permission_handler_windows
+  record_windows
   url_launcher_windows
 )
 

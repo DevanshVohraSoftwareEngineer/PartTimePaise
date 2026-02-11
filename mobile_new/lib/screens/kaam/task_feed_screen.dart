@@ -54,7 +54,7 @@ class _TaskFeedScreenState extends ConsumerState<TaskFeedScreen> {
           title: const Text('Live Task Feed'),
           bottom: TabBar(
             tabs: const [
-              Tab(text: 'AVAILABLE TODAY'),
+              Tab(text: 'FREELANCE GIGS'),
             ],
             indicatorColor: Theme.of(context).primaryColor,
             labelStyle: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
@@ -124,7 +124,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> with AutomaticKeepA
       if (widget.isAsap) {
         if (!isTaskAsap) return false;
       } else {
-        // TODAY tab: Show tasks with urgency 'today' OR tasks posted today
+        // FREELANCE tab: Show tasks with urgency 'today' (renamed to Freelance) OR tasks posted today
         final isTaskToday = task.urgency?.toLowerCase() == 'today';
         final postedToday = task.createdAt.isAfter(todayStart);
         if (!isTaskToday && !postedToday) return false;
@@ -325,7 +325,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> with AutomaticKeepA
                                 ),
                               ),
                               child: Text(
-                                task.urgency?.toUpperCase() ?? 'TODAY',
+                                task.urgency?.toUpperCase() == 'TODAY' ? 'FREELANCE' : task.urgency?.toUpperCase() ?? 'FREELANCE',
                                 style: TextStyle(
                                   color: task.urgency == 'asap' ? Colors.red : Colors.blue,
                                   fontSize: 8,

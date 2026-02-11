@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../services/agora_service.dart';
 
-class CallScreen extends StatefulWidget {
+class CallScreen extends ConsumerStatefulWidget {
   final String matchId;
   final bool isVoiceOnly;
   final String otherUserName;
@@ -15,19 +14,14 @@ class CallScreen extends StatefulWidget {
   });
 
   @override
-  State<CallScreen> createState() => _CallScreenState();
+  ConsumerState<CallScreen> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends State<CallScreen> {
+class _CallScreenState extends ConsumerState<CallScreen> {
   int? _remoteUid;
   bool _localUserJoined = false;
   bool _isMuted = false;
   bool _isVideoOff = false;
-  late RtcEngine _engine;
-
-  // IMPORTANT: Replace with your actual Agora App ID
-  // IMPORTANT: Replace with your actual Agora App ID
-  static const String appId = "da0571340176413289945fc53725b8a6"; // Example Demo ID
 
   @override
   void initState() {
@@ -36,17 +30,10 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> initAgora() async {
-    // Retrieve permissions
-    await [Permission.microphone, Permission.camera].request();
-
-    // Create the engine
-    _engine = createAgoraRtcEngine();
-    await _engine.initialize(const RtcEngineContext(
-      appId: appId,
-      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-    ));
-
-    _engine.registerEventHandler(
+    final agora = ref.read(agoraServiceProvider);
+    
+    // Set up event handlers
+    agora.engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
           debugPrint("local user ${connection.localUid} joined");
@@ -67,57 +54,42 @@ class _CallScreenState extends State<CallScreen> {
           });
           Navigator.pop(context);
         },
-        onTokenPrivilegeWillExpire: (RtcConnection connection, String token) {
-          debugPrint('[onTokenPrivilegeWillExpire] connection: ${connection.toJson()}, token: $token');
-        },
       ),
     );
 
     if (widget.isVoiceOnly) {
-      await _engine.disableVideo();
+      await agora.engine.disableVideo();
     } else {
-      await _engine.enableVideo();
-      await _engine.startPreview();
+      await agora.engine.enableVideo();
+      await agora.engine.startPreview();
     }
 
-    await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-    
-    // Join channel with matchId as channel name
-    await _engine.joinChannel(
-      token: "", // Use empty string for testing if token is not required in Agora Console
-      channelId: widget.matchId.substring(0, 31), // Agora channel ID limit
-      uid: 0,
-      options: const ChannelMediaOptions(),
-    );
+    // Join channel (using anonymous UID 0 and no token for dev testing)
+    await agora.joinChannel(widget.matchId, 0, "");
   }
 
   @override
   void dispose() {
-    _dispose();
+    ref.read(agoraServiceProvider).leaveChannel();
     super.dispose();
-  }
-
-  Future<void> _dispose() async {
-    await _engine.leaveChannel();
-    await _engine.release();
   }
 
   void _onToggleMute() {
     setState(() {
       _isMuted = !_isMuted;
     });
-    _engine.muteLocalAudioStream(_isMuted);
+    ref.read(agoraServiceProvider).engine.muteLocalAudioStream(_isMuted);
   }
 
   void _onToggleVideo() {
     setState(() {
       _isVideoOff = !_isVideoOff;
     });
-    _engine.muteLocalVideoStream(_isVideoOff);
+    ref.read(agoraServiceProvider).engine.muteLocalVideoStream(_isVideoOff);
   }
 
   void _onSwitchCamera() {
-    _engine.switchCamera();
+    ref.read(agoraServiceProvider).engine.switchCamera();
   }
 
   @override
@@ -145,7 +117,7 @@ class _CallScreenState extends State<CallScreen> {
                         ? const Icon(Icons.person, size: 50, color: Colors.white)
                         : AgoraVideoView(
                             controller: VideoViewController(
-                              rtcEngine: _engine,
+                              rtcEngine: ref.read(agoraServiceProvider).engine,
                               canvas: const VideoCanvas(uid: 0),
                             ),
                           ))
@@ -261,7 +233,7 @@ class _CallScreenState extends State<CallScreen> {
             )
           : AgoraVideoView(
               controller: VideoViewController.remote(
-                rtcEngine: _engine,
+                rtcEngine: ref.read(agoraServiceProvider).engine,
                 canvas: VideoCanvas(uid: _remoteUid),
                 connection: RtcConnection(channelId: widget.matchId.substring(0, 31)),
               ),

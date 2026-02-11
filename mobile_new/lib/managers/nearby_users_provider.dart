@@ -58,10 +58,12 @@ class NearbyUsersNotifier extends StateNotifier<List<User>> {
               email: data['email'] ?? '',
               avatarUrl: data['avatar_url'],
               role: data['role'] ?? 'worker',
+              college: data['college'],
               verified: data['verified'] == true,
               isOnline: true,
               currentLat: lat,
               currentLng: lng,
+              distanceMeters: distance,
               createdAt: DateTime.now(),
             ));
           }

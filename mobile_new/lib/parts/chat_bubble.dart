@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data_types/message.dart';
 import '../config/theme.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../helpers/content_filter.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -60,8 +61,10 @@ class ChatBubble extends StatelessWidget {
               child: CircleAvatar(
                 radius: 16,
                 backgroundColor: AppTheme.grey200,
-                backgroundImage: message.senderAvatar != null ? NetworkImage(message.senderAvatar!) : null,
-                child: message.senderAvatar == null ? Text(
+                backgroundImage: (message.senderAvatar != null && message.senderAvatar!.isNotEmpty) 
+                  ? CachedNetworkImageProvider(message.senderAvatar!) 
+                  : null,
+                child: (message.senderAvatar == null || message.senderAvatar!.isEmpty) ? Text(
                   message.senderName?.substring(0, 1).toUpperCase() ?? 'U',
                   style: const TextStyle(
                     fontSize: 10,
@@ -113,6 +116,48 @@ class ChatBubble extends StatelessWidget {
                            borderRadius: BorderRadius.circular(12),
                            child: Image.network(message.content, fit: BoxFit.cover),
                          )
+                      else if (message.type == 'video')
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.video_library,
+                                size: 16,
+                                color: isCurrentUser ? Colors.white : AppTheme.electricMedium,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "Video Message",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (message.type == 'voice')
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.mic,
+                                size: 16,
+                                color: isCurrentUser ? Colors.white : AppTheme.electricMedium,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "Voice Message",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
                       else if (isVideoCall) 
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),

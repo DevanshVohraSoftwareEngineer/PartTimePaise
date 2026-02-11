@@ -217,7 +217,7 @@ class _ASAPModeScreenState extends ConsumerState<ASAPModeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "TODAY'S EARNINGS",
+                  "FREELANCE EARNINGS",
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.5),
                     fontSize: 12,

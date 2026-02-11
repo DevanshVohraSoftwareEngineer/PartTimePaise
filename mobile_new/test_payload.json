@@ -1,0 +1,15 @@
+{
+    "contents": [
+        {
+            "parts": [
+                {
+                    "text": "TASK: STRICT CONTENT MODERATION & QUALITY CHECK\nAnalyze the following text for:\n1. SAFETY: Check for sexually abusive, explicit, illegal, violent, or hate speech content.\n2. QUALITY: Check if the text is gibberish, random key-mashing (e.g. \"asdfg\"), or nonsensical. It must be a GENUINE task request.\n\nSTRICT ZERO TOLERANCE POLICY FOR:\n- Sexual violence, harassment, or strictly adult content.\n- Illegal acts (drugs, weapons, scams, hacking).\n- Hate speech or severe profanity.\n- RANDOM/GIBBERISH text or meaningless strings (e.g. \"dhjdjd\", \"testing 123\" without context).\n\nTEXT TO ANALYZE (can be in Hindi, English, Hinglish, etc.):\n\"I need someone to help me move my boxes to Block C.\"\n\nJSON RESPONSE SCHEMA:\n{\n  \"is_safe\": boolean, \n  \"reason\": \"Short explanation for user if blocked\", \n  \"flagged_content\": \"The specific words or phrases that triggered the block, or 'Gibberish'\"\n}"
+                }
+            ]
+        }
+    ],
+    "generationConfig": {
+        "responseMimeType": "application/json",
+        "temperature": 0.0
+    }
+}

@@ -82,7 +82,7 @@ class AboutUsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('• Delivery services'),
@@ -106,7 +106,7 @@ class AboutUsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(

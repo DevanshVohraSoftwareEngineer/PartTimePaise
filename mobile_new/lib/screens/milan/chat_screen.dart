@@ -12,6 +12,9 @@ import '../../data_types/task_match.dart';
 import '../../services/supabase_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String matchId;
@@ -33,7 +36,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final FocusNode _focusNode = FocusNode(); // Added FocusNode for reliable autofocus
   Timer? _typingTimer;
   Timer? _countdownTimer;
-  Duration _remainingTime = const Duration(hours: 24);
+  Duration _remainingTime = const Duration(hours: 12);
+  
+  // Voice Recording state
+  final _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  String? _recordingPath;
 
   @override
   void initState() {
@@ -63,8 +71,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final matchIndex = matchesState.matches.indexWhere((m) => m.id == widget.matchId);
     if (matchIndex != -1) {
       final match = matchesState.matches[matchIndex];
-      final expiryTime = match.matchedAt.add(const Duration(hours: 24));
-      final now = DateTime.now();
+      final expiryTime = match.matchedAt.add(const Duration(hours: 12));
+      final now = DateTime.now().toUtc();
       final difference = expiryTime.difference(now);
       
       setState(() {
@@ -95,6 +103,210 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         curve: Curves.easeOut,
       );
     }
+  }
+
+  Widget _buildVerifiedIdentityNotice(TaskMatch match) {
+    final currentUser = ref.watch(currentUserProvider);
+    final bool isClient = currentUser?.role == 'client';
+    
+    // Determine the "other" person's KYC
+    final String? otherSelfie = isClient ? match.workerSelfieUrl : match.clientSelfieUrl;
+    final String? otherName = isClient ? match.workerName : match.clientName;
+    final String? otherStatus = isClient ? match.workerVerificationStatus : match.clientVerificationStatus;
+
+    if (otherSelfie == null) return const SizedBox.shrink();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () => _showMutualKYCDialog(match),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: otherStatus == 'verified' 
+              ? (isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.withOpacity(0.05))
+              : (isDark ? Colors.green.withOpacity(0.1) : Colors.green.withOpacity(0.05)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: otherStatus == 'verified' ? Colors.blue.withOpacity(0.3) : Colors.green.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: otherSelfie,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const Icon(Icons.person),
+                  ),
+                ),
+                if (otherStatus == 'verified')
+                  const Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Icon(Icons.verified, size: 16, color: Color(0xFF0095F6)),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    otherStatus == 'verified' ? "TRUSTED PARTNER" : "IDENTITY PROOFS AVAILABLE",
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      color: otherStatus == 'verified' ? Colors.blue.shade700 : Colors.green.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "You are chatting with $otherName. Tap to view mutual identity proofs.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMutualKYCDialog(TaskMatch match) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Column(
+          children: [
+            Icon(Icons.security, color: AppTheme.electricMedium, size: 32),
+            const SizedBox(height: 8),
+            Text('Mutual Identity Verification', 
+              style: AppTheme.heading3.copyWith(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                 const Text(
+                  'To ensure a safe campus environment, both users share their primary KYC details once matched.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+                
+                // Worker Side
+                _buildKYCCard(
+                  'Worker: ${match.workerName ?? 'Anonymous'}',
+                  match.workerSelfieUrl,
+                  match.workerIdCardUrl,
+                  match.workerSelfieWithIdUrl,
+                  match.workerVerificationStatus == 'verified',
+                ),
+                
+                const SizedBox(height: 16),
+                const Icon(Icons.swap_vert, color: Colors.grey),
+                const SizedBox(height: 16),
+                
+                // Client Side
+                _buildKYCCard(
+                  'Poster: ${match.clientName ?? 'Anonymous'}',
+                  match.clientSelfieUrl,
+                  match.clientIdCardUrl,
+                  match.clientSelfieWithIdUrl,
+                  match.clientVerificationStatus == 'verified',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('DISMISS', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.electricMedium)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKYCCard(String title, String? selfie, String? idCard, String? selfieWithId, bool isVerified) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isVerified ? Colors.blue.withOpacity(0.3) : Colors.grey.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Spacer(),
+              if (isVerified)
+                const Icon(Icons.verified, size: 16, color: Colors.blue),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildKYCThumbnail('Selfie', selfie),
+              const SizedBox(width: 8),
+              _buildKYCThumbnail('ID Card', idCard),
+              const SizedBox(width: 8),
+              _buildKYCThumbnail('Handheld', selfieWithId),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKYCThumbnail(String label, String? url) {
+    return Column(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: url != null 
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: url, 
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const Icon(Icons.photo, size: 20, color: Colors.grey),
+                  ),
+                )
+              : const Icon(Icons.no_photography, size: 20, color: Colors.grey),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 8, color: Colors.grey, fontWeight: FontWeight.bold)),
+      ],
+    );
   }
 
   void _sendMessage() {
@@ -146,7 +358,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               const Icon(Icons.auto_delete_outlined, size: 16, color: Colors.orange),
               const SizedBox(width: 8),
               Text(
-                "24H EPHEMERAL CHAT",
+                "12H EPHEMERAL CHAT",
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
@@ -158,7 +370,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "For security and privacy, this chat and all its messages will be permanently deleted 24 hours after the match was created.",
+            "For security and privacy, this chat and all its messages will be permanently deleted 12 hours after the match was created.",
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
@@ -247,6 +459,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    final picker = ImagePicker();
+    final video = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 1));
+    if (video != null) {
+      _sendMediaMessage(File(video.path), 'video');
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final directory = await getApplicationDocumentsDirectory();
+        final path = p.join(directory.path, 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a');
+        
+        await _audioRecorder.start(const RecordConfig(), path: path);
+        setState(() {
+          _isRecording = true;
+          _recordingPath = path;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error starting recording: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+      });
+      if (path != null) {
+        _sendMediaMessage(File(path), 'voice');
+      }
+    } catch (e) {
+      debugPrint('Error stopping recording: $e');
+    }
+  }
+
   Future<void> _sendMediaMessage(File file, String type) async {
     final url = await ref.read(supabaseServiceProvider).uploadChatMedia(widget.matchId, file);
     if (url != null) {
@@ -297,10 +548,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     
     final match = matchesState.matches[matchIndex];
-    final isClient = currentUser?.role == 'client';
-    final otherUserName = isClient ? match.workerName : match.clientName;
-    final otherUserAvatar = isClient ? match.workerAvatar : match.clientAvatar;
-    final otherUserVerified = (isClient ? match.workerVerificationStatus : match.clientVerificationStatus) == 'verified';
+    final bool isMeWorker = currentUser?.id == match.workerId;
+    final bool isClient = currentUser?.id == match.clientId;
+    final otherUserName = isMeWorker ? match.clientName : match.workerName;
+    final otherUserAvatar = isMeWorker ? match.clientAvatar : match.workerAvatar;
+    final otherUserVerified = (isMeWorker ? match.clientVerificationStatus : match.workerVerificationStatus) == 'verified';
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -332,9 +584,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                            color: isDark ? Colors.white : Colors.black87,
                          ),
                        ),
-                       if (otherUserVerified) ...[
+                       if (otherUserVerified || isClient ? match.workerSelfieUrl != null : match.clientSelfieUrl != null) ...[
                          const SizedBox(width: 4),
-                         const Icon(Icons.verified, size: 14, color: Color(0xFF0095F6)),
+                         GestureDetector(
+                           onTap: () => _showMutualKYCDialog(match),
+                           child: Icon(
+                             Icons.verified_user, 
+                             size: 14, 
+                             color: otherUserVerified ? const Color(0xFF0095F6) : Colors.green
+                           ),
+                         ),
                        ],
                        const SizedBox(width: 8),
                        _buildCountdownTag(),
@@ -378,7 +637,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemCount: chatState.messages.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
-                        return _buildExpiryNotice();
+                        return Column(
+                          children: [
+                            _buildExpiryNotice(),
+                             if (otherUserVerified || (isClient ? match.workerSelfieUrl != null : match.clientSelfieUrl != null))
+                               _buildVerifiedIdentityNotice(match),
+                          ],
+                        );
                       }
                       
                       final message = chatState.messages[index - 1];
@@ -487,13 +752,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 color: const Color(0xFFE0F2FE),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.verified_rounded, size: 16, color: Color(0xFF0EA5E9)),
-                  SizedBox(width: 4),
+                  const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF0EA5E9)),
+                  const SizedBox(width: 4),
                   Text(
                     'DEAL LOCKED', 
-                    style: TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 11)
+                    style: TextStyle(color: const Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 11)
                   ),
                 ],
               ),
@@ -584,8 +849,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     : Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.mic_none_rounded, color: isDark ? Colors.white70 : Colors.black54),
-                            onPressed: () {}, 
+                            icon: Icon(
+                              _isRecording ? Icons.stop_circle_rounded : Icons.mic_none_rounded, 
+                              color: _isRecording ? Colors.red : (isDark ? Colors.white70 : Colors.black54)
+                            ),
+                            onPressed: _isRecording ? _stopRecording : _startRecording, 
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.videocam_outlined, color: isDark ? Colors.white70 : Colors.black54),
+                            onPressed: _pickVideo,
                           ),
                           IconButton(
                             icon: Icon(Icons.image_outlined, color: isDark ? Colors.white70 : Colors.black54),
@@ -600,6 +872,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
+
+  // Unused as replaced by _showMutualKYCDialog
 
   Widget _buildMinimalOrphanedChat(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -622,4 +896,5 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
+
 }

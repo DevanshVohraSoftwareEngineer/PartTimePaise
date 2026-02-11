@@ -338,6 +338,7 @@ alter table tasks add column if not exists client_verification_status text defau
 alter table tasks add column if not exists reach_count integer default 0;
 alter table tasks add column if not exists realtime_viewers_count integer default 0;
 alter table tasks add column if not exists viewed_by_ids uuid[] default '{}';
+alter table tasks add column if not exists require_selfie boolean default false;
 
 -- Functions to track analytics
 create or replace function track_task_view(t_id uuid, u_id uuid)
@@ -4850,3 +4851,463 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ==========================================
+-- FIX: Task Status Constraint
+-- ==========================================
+
+-- The previous constraint likely missed 'assigned' or 'broadcasting', causing errors.
+-- This script updates the constraint to allow all valid statuses.
+
+-- 1. Drop the old constraint
+ALTER TABLE public.tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+
+-- 2. Add the corrected constraint
+ALTER TABLE public.tasks ADD CONSTRAINT tasks_status_check 
+CHECK (status IN (
+  'open', 
+  'broadcasting', 
+  'assigned', 
+  'in_progress', 
+  'completed', 
+  'cancelled'
+));
+
+-- 3. Verify (Optional comment)
+-- If this runs successfully, the "assigned" status error will be resolved.
+
+
+-- PartTimePaise KYC Storage & Verifications SQL
+
+-- 0. Create the Storage Bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('chat_assets', 'chat_assets', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 1. Ensure Profiles table has KYC columns
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS id_card_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS selfie_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS selfie_with_id_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verification_status TEXT; -- 'pending', 'verified', 'rejected'
+
+-- 2. Create id_verifications table for audit trail
+CREATE TABLE IF NOT EXISTS id_verifications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  selfie_url text,
+  id_card_url text,
+  selfie_with_id_url text,
+  status text DEFAULT 'pending',
+  extracted_data jsonb DEFAULT '{}',
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- Ensure all columns exist in id_verifications (in case table was created previously)
+ALTER TABLE id_verifications ADD COLUMN IF NOT EXISTS selfie_url TEXT;
+ALTER TABLE id_verifications ADD COLUMN IF NOT EXISTS id_card_url TEXT;
+ALTER TABLE id_verifications ADD COLUMN IF NOT EXISTS selfie_with_id_url TEXT;
+ALTER TABLE id_verifications ADD COLUMN IF NOT EXISTS extracted_data JSONB DEFAULT '{}';
+
+-- 1b. Ensure Tasks table has require_selfie column
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS require_selfie BOOLEAN DEFAULT false;
+
+-- 2. Add indexes for faster fetching in chats
+CREATE INDEX IF NOT EXISTS idx_id_verifications_user_id ON id_verifications(user_id);
+
+-- 3. Enable RLS for id_verifications
+ALTER TABLE id_verifications ENABLE ROW LEVEL SECURITY;
+
+-- 4. Policies for id_verifications
+-- Allow users to view their own verification status
+DROP POLICY IF EXISTS "Users can view their own verification" ON id_verifications;
+CREATE POLICY "Users can view their own verification" 
+ON id_verifications FOR SELECT 
+USING (auth.uid() = user_id);
+
+-- Allow admins to see all (if roles are used)
+DROP POLICY IF EXISTS "Admins can view all verification" ON id_verifications;
+CREATE POLICY "Admins can view all verification" 
+ON id_verifications FOR ALL 
+USING (EXISTS (
+  SELECT 1 FROM profiles 
+  WHERE id = auth.uid() AND role = 'admin'
+));
+
+-- 5. Storage Policies for 'chat_assets' bucket
+
+-- Policy: Authenticated users can upload to kyc/ folder
+DROP POLICY IF EXISTS "Allow KYC Uploads" ON storage.objects;
+CREATE POLICY "Allow KYC Uploads"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'chat_assets' AND (storage.foldername(name))[1] = 'kyc');
+
+-- Policy: Authenticated users can upload to chat_media/ folder
+DROP POLICY IF EXISTS "Allow Chat Media Uploads" ON storage.objects;
+CREATE POLICY "Allow Chat Media Uploads"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'chat_assets' AND (storage.foldername(name))[1] = 'chat_media');
+
+-- Policy: Allow users to delete their own uploads
+DROP POLICY IF EXISTS "Users can delete own assets" ON storage.objects;
+CREATE POLICY "Users can delete own assets"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'chat_assets' AND (storage.foldername(name))[2] = auth.uid()::text);
+
+-- Policy: Public read for KYC and Chat assets
+DROP POLICY IF EXISTS "Public Asset View" ON storage.objects;
+CREATE POLICY "Public Asset View"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'chat_assets');
+-- 🛡️ SETUP STORAGE BUCKETS
+-- Run this in the Supabase SQL Editor to ensure buckets exist and have correct permissions
+-- 1. Create Buckets
+insert into storage.buckets (id, name, public) 
+values ('task_verifications', 'task_verifications', true),
+       ('kyc-documents', 'kyc-documents', false)
+on conflict (id) do nothing;
+-- 2. RLS Policies for task_verifications
+-- Allows authenticated users to upload to their own folder and anyone to view
+drop policy if exists "Allow Authenticated Uploads" on storage.objects;
+create policy "Allow Authenticated Uploads"
+on storage.objects for insert
+with check (
+  bucket_id = 'task_verifications' 
+  and auth.role() = 'authenticated'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+drop policy if exists "Allow Public View" on storage.objects;
+create policy "Allow Public View"
+on storage.objects for select
+using (bucket_id = 'task_verifications');
+-- 3. RLS Policies for kyc-documents
+-- High security: Only the owner and admins can view/upload
+drop policy if exists "Allow Owner Upload KYC" on storage.objects;
+create policy "Allow Owner Upload KYC"
+on storage.objects for insert
+with check (
+  bucket_id = 'kyc-documents' 
+  and auth.role() = 'authenticated'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+drop policy if exists "Allow Owner View KYC" on storage.objects;
+create policy "Allow Owner View KYC"
+on storage.objects for select
+using (
+  bucket_id = 'kyc-documents' 
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+---
+-- ========================================================
+-- 🛡️ ULTIMATE DATABASE FIX (STORAGE + NOTIFICATIONS + CHAT)
+-- 💡 MUST CLEAR THE SQL EDITOR COMPLETELY BEFORE PASTING 💡
+-- ========================================================
+
+-- PART 1: NOTIFICATIONS RLS FIX
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;
+CREATE POLICY "Users can view own notifications" 
+ON notifications FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert notifications" ON notifications;
+CREATE POLICY "Users can insert notifications" 
+ON notifications FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE OR REPLACE FUNCTION execute_task_dispatch()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(ARRAY_LENGTH(NEW.candidate_ids, 1), 0) > 0 THEN
+    INSERT INTO gig_requests (task_id, worker_id, status, expires_at)
+    SELECT NEW.id, id, 'pending', now() + interval '24 hours'
+    FROM UNNEST(NEW.candidate_ids) as id;
+
+    INSERT INTO notifications (user_id, type, title, message, data, is_read)
+    SELECT id, 'high_priority_dispatch', '🔔 NEW GIG: ' || NEW.title, 
+    'Tap to Accept Instantly!', jsonb_build_object('task_id', NEW.id, 'priority', 'urgent', 'is_alarm', true), false
+    FROM UNNEST(NEW.candidate_ids) as id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT ALL ON notifications TO authenticated;
+
+-- PART 2: NO-EXCUSES FINAL STORAGE FIX
+-- 1. Create Buckets
+INSERT INTO storage.buckets (id, name, public) VALUES ('task_verifications', 'task_verifications', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+INSERT INTO storage.buckets (id, name, public) VALUES ('kyc_documents', 'kyc_documents', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Clean Slate (Robust Drop)
+DO $$ 
+BEGIN
+    BEGIN DROP POLICY IF EXISTS "Final_Upload_Policy" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Final_Select_Policy" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Unstoppable Upload" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Catch_All_Insert" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Open_Upload" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Final_Fix_Insert" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "GodMode_Insert" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+    BEGIN DROP POLICY IF EXISTS "Global_Auth_Access" ON storage.objects; EXCEPTION WHEN OTHERS THEN NULL; END;
+END $$;
+
+-- 3. THE "ANYBODY LOGGED IN CAN UPLOAD" POLICY
+CREATE POLICY "Final_Upload_Policy" 
+ON storage.objects FOR INSERT TO authenticated 
+WITH CHECK (bucket_id IN ('task_verifications', 'kyc_documents'));
+
+CREATE POLICY "Final_Select_Policy" 
+ON storage.objects FOR SELECT TO public 
+USING (bucket_id IN ('task_verifications', 'kyc_documents'));
+
+-- PART 3: CHAT CLEANUP (12 Hours)
+CREATE OR REPLACE FUNCTION cleanup_chats() RETURNS void AS $$ 
+BEGIN 
+  DELETE FROM chat_messages WHERE id IN (
+    SELECT m.id FROM chat_messages m JOIN matches ma ON m.match_id = ma.id 
+    WHERE ma.created_at < NOW() - INTERVAL '12 hours'
+  ); 
+END; $$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION cleanup_chats() TO authenticated;
+
+
+-- ========================================================
+-- 🛡️ MATCH FLOW FIX: BRIDGE SWIPES TO BIDS
+-- 💡 RUN THIS IN SUPABASE SQL EDITOR 💡
+-- ========================================================
+
+-- 1. Trigger Function to sync Swipes -> Bids
+-- This ensures task owners see "Likes" from the feed in their "Interested" section
+CREATE OR REPLACE FUNCTION sync_swipe_to_bid()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.direction = 'right' THEN
+    -- Get user name from profiles for the bid record
+    -- (Bids table usually has worker_name denormalized for speed)
+    INSERT INTO bids (task_id, worker_id, amount, message, status, worker_face_url)
+    SELECT 
+      NEW.task_id, 
+      NEW.user_id, 
+      (SELECT budget FROM tasks WHERE id = NEW.task_id), -- Default to task budget
+      'Interested for this gig!',
+      'pending',
+      (SELECT selfie_url FROM profiles WHERE id = NEW.user_id)
+    ON CONFLICT (task_id, worker_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Attach Trigger
+DROP TRIGGER IF EXISTS on_swipe_right ON swipes;
+CREATE TRIGGER on_swipe_right
+AFTER INSERT OR UPDATE ON swipes
+FOR EACH ROW EXECUTE FUNCTION sync_swipe_to_bid();
+
+-- 3. Ensure "create_match_secure" works for Instant Match
+CREATE OR REPLACE FUNCTION create_match_secure(p_task_id UUID, p_worker_id UUID)
+RETURNS UUID AS $$
+DECLARE
+  v_match_id UUID;
+  v_client_id UUID;
+BEGIN
+  -- 1. Get client ID
+  SELECT client_id INTO v_client_id FROM tasks WHERE id = p_task_id;
+  
+  -- 2. Insert Match
+  INSERT INTO matches (task_id, client_id, worker_id, status)
+  VALUES (p_task_id, v_client_id, p_worker_id, 'active')
+  ON CONFLICT (task_id, worker_id) DO UPDATE SET status = 'active'
+  RETURNING id INTO v_match_id;
+
+  -- 3. Update Task Status
+  UPDATE tasks SET 
+    status = 'assigned', 
+    worker_id = p_worker_id 
+  WHERE id = p_task_id;
+
+  -- 4. Send System Message
+  INSERT INTO chat_messages (match_id, sender_id, content, type)
+  VALUES (v_match_id, v_client_id, 'You matched! Start the conversation.', 'system');
+
+  RETURN v_match_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
+-- ========================================================
+-- 🛡️ ULTIMATE DATABASE FIX (STORAGE + NOTIFICATIONS + CHAT)
+-- 💡 MUST CLEAR THE SQL EDITOR COMPLETELY BEFORE PASTING 💡
+-- ========================================================
+
+-- PART 1: NOTIFICATIONS RLS FIX (Failed to post task)
+-- --------------------------------------------------------
+
+-- Enable RLS
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Allow Users to View Own Notifications
+DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;
+CREATE POLICY "Users can view own notifications" 
+ON notifications FOR SELECT 
+USING (auth.uid() = user_id);
+
+-- Allow Authenticated Users to Insert Notifications (Critical for Dispatch)
+-- This allows the dispatcher to create alerts for other users.
+DROP POLICY IF EXISTS "Users can insert notifications" ON notifications;
+CREATE POLICY "Users can insert notifications" 
+ON notifications FOR INSERT 
+WITH CHECK (auth.role() = 'authenticated');
+
+-- Update Dispatch Trigger to be SECURITY DEFINER
+-- This ensures the function runs with elevated service privileges.
+CREATE OR REPLACE FUNCTION execute_task_dispatch()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(ARRAY_LENGTH(NEW.candidate_ids, 1), 0) > 0 THEN
+    -- Insert gig requests
+    INSERT INTO gig_requests (task_id, worker_id, status, expires_at)
+    SELECT NEW.id, id, 'pending', now() + interval '24 hours'
+    FROM UNNEST(NEW.candidate_ids) as id;
+
+    -- Create Notifications for individual candidates
+    INSERT INTO notifications (user_id, type, title, message, data, is_read)
+    SELECT 
+      id, 
+      'high_priority_dispatch', 
+      '🔔 NEW GIG: ' || NEW.title, 
+      'Tap to Accept Instantly!', 
+      jsonb_build_object(
+        'task_id', NEW.id, 
+        'priority', 'urgent', 
+        'is_alarm', true,
+        'pickup_lat', NEW.pickup_lat,
+        'pickup_lng', NEW.pickup_lng
+      ), 
+      false
+    FROM UNNEST(NEW.candidate_ids) as id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant permissions to authenticated users
+GRANT ALL ON notifications TO authenticated;
+
+
+-- PART 2: NO-EXCUSES FINAL STORAGE FIX (User Provided)
+-- --------------------------------------------------------
+
+-- 1. Create Buckets
+INSERT INTO storage.buckets (id, name, public) VALUES ('task_verifications', 'task_verifications', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+INSERT INTO storage.buckets (id, name, public) VALUES ('kyc_documents', 'kyc_documents', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Clean Slate (Robust Drop)
+-- We drop these one by one to ensure no name collisions.
+DROP POLICY IF EXISTS "Final_Upload_Policy" ON storage.objects;
+DROP POLICY IF EXISTS "Final_Select_Policy" ON storage.objects;
+DROP POLICY IF EXISTS "Unstoppable Upload" ON storage.objects;
+DROP POLICY IF EXISTS "Catch_All_Insert" ON storage.objects;
+DROP POLICY IF EXISTS "Open_Upload" ON storage.objects;
+DROP POLICY IF EXISTS "Final_Fix_Insert" ON storage.objects;
+DROP POLICY IF EXISTS "GodMode_Insert" ON storage.objects;
+DROP POLICY IF EXISTS "Global_Auth_Access" ON storage.objects;
+
+-- 3. THE "ANYBODY LOGGED IN CAN UPLOAD" POLICY
+CREATE POLICY "Final_Upload_Policy" 
+ON storage.objects FOR INSERT 
+TO authenticated 
+WITH CHECK (bucket_id IN ('task_verifications', 'kyc_documents'));
+
+CREATE POLICY "Final_Select_Policy" 
+ON storage.objects FOR SELECT 
+TO public 
+USING (bucket_id IN ('task_verifications', 'kyc_documents'));
+
+
+-- PART 3: CHAT CLEANUP (Optional but requested)
+-- --------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION cleanup_chats() 
+RETURNS void AS $$ 
+BEGIN 
+  DELETE FROM chat_messages 
+  WHERE id IN (
+    SELECT m.id 
+    FROM chat_messages m 
+    JOIN matches ma ON m.match_id = ma.id 
+    WHERE ma.created_at < NOW() - INTERVAL '12 hours'
+  ); 
+END; 
+$$ LANGUAGE plpgsql;
+
+-- Grant execute to authenticated users (if needed to call via RPC)
+GRANT EXECUTE ON FUNCTION cleanup_chats() TO authenticated;
+
+-- PART 4: MATCH FLOW FIX (Bridge Swipes -> Bids + Instant Match)
+-- --------------------------------------------------------
+
+-- 1. Trigger Function to sync Swipes -> Bids
+CREATE OR REPLACE FUNCTION sync_swipe_to_bid()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.direction = 'right' THEN
+    INSERT INTO bids (task_id, worker_id, amount, message, status, worker_face_url)
+    SELECT 
+      NEW.task_id, 
+      NEW.user_id, 
+      (SELECT budget FROM tasks WHERE id = NEW.task_id),
+      'Interested for this gig!',
+      'pending',
+      (SELECT selfie_url FROM profiles WHERE id = NEW.user_id)
+    ON CONFLICT (task_id, worker_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Attach Trigger
+DROP TRIGGER IF EXISTS on_swipe_right ON swipes;
+CREATE TRIGGER on_swipe_right
+AFTER INSERT OR UPDATE ON swipes
+FOR EACH ROW EXECUTE FUNCTION sync_swipe_to_bid();
+
+-- 3. Secure Match RPC (Used for Instant Match & Manual Accept)
+CREATE OR REPLACE FUNCTION create_match_secure(p_task_id UUID, p_worker_id UUID)
+RETURNS UUID AS $$
+DECLARE
+  v_match_id UUID;
+  v_client_id UUID;
+BEGIN
+  SELECT client_id INTO v_client_id FROM tasks WHERE id = p_task_id;
+  
+  INSERT INTO matches (task_id, client_id, worker_id, status)
+  VALUES (p_task_id, v_client_id, p_worker_id, 'active')
+  ON CONFLICT (task_id, worker_id) DO UPDATE SET status = 'active'
+  RETURNING id INTO v_match_id;
+
+  UPDATE tasks SET status = 'assigned', worker_id = p_worker_id WHERE id = p_task_id;
+
+  INSERT INTO chat_messages (match_id, sender_id, content, type)
+  VALUES (v_match_id, v_client_id, 'You matched! Start the conversation.', 'system');
+
+  RETURN v_match_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute to authenticated
+GRANT EXECUTE ON FUNCTION create_match_secure(UUID, UUID) TO authenticated;
+
+-- ========================================================
+-- FINISHED: RUN THIS IN SUPABASE SQL EDITOR
+-- ========================================================

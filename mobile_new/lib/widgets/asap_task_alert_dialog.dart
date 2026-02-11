@@ -93,7 +93,7 @@ class ASAPTaskAlertDialog extends StatelessWidget {
         ElevatedButton(
           onPressed: () {
             Navigator.of(context).pop();
-            context.go('/'); // Navigate to swipe feed where task will appear
+            context.go('/swipe'); // Navigate to swipe feed where task will appear
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.greenAccent,

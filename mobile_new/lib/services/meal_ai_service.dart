@@ -2,18 +2,23 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final mealAiServiceProvider = Provider((ref) => MealAiService());
 
 class MealAiService {
   // ⚠️ NOTE: For production, store this in an environment variable or secure backend.
   // For university demo, using placeholder logic to show how it connects.
-  static const String _apiKey = "AIzaSyBfUJCWmGaek-rQGUdCXkG4uGJgMJQu5pI"; 
-
+  static String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? ""; 
+  
   Future<Map<String, dynamic>> analyzeImage(File imageFile) async {
+    if (_apiKey.isEmpty) {
+       return _errorResponse('MISSING API KEY', 'Please add your GEMINI_API_KEY to the .env file.');
+    }
+
     try {
       final model = GenerativeModel(
-        model: 'gemini-2.5-flash', // Updated to 2.5-flash (2026 Stable)
+        model: 'gemini-2.5-flash', // Upgraded to latest fast model
         apiKey: _apiKey,
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',
@@ -128,19 +133,91 @@ class MealAiService {
         errorMsg = 'Connection issue. Please check your internet and try again.';
       }
 
-      return {
-        'is_food': false,
-        'item': errorTitle,
-        'description': errorMsg,
-        'calories': 0,
-        'protein': '0g',
-        'carbs': '0g',
-        'fats': '0g',
-        'health_score': 0,
-        'ai_insight': 'Technical issue detected. ${errorMsg.contains("API") ? "Update the API key in lib/services/meal_ai_service.dart" : "Try moving to a better signal area."}',
-        'proven_source': 'System Error',
-        'confidence': 0.0,
-      };
+      return _errorResponse(errorTitle, errorMsg);
     }
+  }
+
+  Future<Map<String, dynamic>> moderateText(String text) async {
+    if (_apiKey.isEmpty) {
+       print("⚠️ AI Moderation Skipped: No API Key.");
+       // Fail safe: If no API key, let it pass but log warning.
+       return {'is_safe': true, 'reason': 'No API Key provided.'};
+    }
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: _apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+          temperature: 0.0,
+        ),
+      );
+
+      final prompt = """
+        TASK: STRICT CONTENT MODERATION & QUALITY CHECK
+        Analyze the following text for:
+        1. SAFETY: Check for sexually abusive, explicit, illegal, violent, or hate speech content.
+        2. QUALITY: Check if the text is gibberish, random key-mashing (e.g. "asdfg"), or nonsensical. It must be a GENUINE task request.
+        
+        STRICT ZERO TOLERANCE POLICY FOR:
+        - Sexual violence, harassment, or strictly adult content.
+        - Illegal acts (drugs, weapons, scams, hacking).
+        - Hate speech or severe profanity.
+        - RANDOM/GIBBERISH text or meaningless strings (e.g. "dhjdjd", "testing 123" without context).
+        
+        TEXT TO ANALYZE (can be in Hindi, English, Hinglish, etc.):
+        "$text"
+
+        JSON RESPONSE SCHEMA:
+        {
+          "is_safe": boolean, 
+          "reason": "Short explanation for user if blocked", 
+          "flagged_content": "The specific words or phrases that triggered the block, or 'Gibberish'"
+        }
+      """;
+
+      final content = [Content.text(prompt)];
+
+      final response = await model.generateContent(content).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Moderation timed out'),
+      );
+
+      String cleanJson = response.text?.trim() ?? "{}";
+      if (cleanJson.contains("```json")) {
+        cleanJson = cleanJson.split("```json").last.split("```").first.trim();
+      } else if (cleanJson.contains("```")) {
+        cleanJson = cleanJson.split("```").last.split("```").first.trim();
+      }
+
+      final decoded = json.decode(cleanJson);
+      return {
+        'is_safe': decoded['is_safe'] ?? true, // Default to safe if unsure? Or block? Let's default true to avoid false positives blocking.
+        'reason': decoded['reason'] ?? 'Content flagged by AI.',
+        'flagged_content': decoded['flagged_content'] ?? '',
+      };
+
+    } catch (e) {
+      print("❌ AI Moderation Error: $e");
+      // Allow on error to avoid blocking users due to tech issues
+      return {'is_safe': true, 'reason': 'AI Check Failed: $e'}; 
+    }
+  }
+
+  Map<String, dynamic> _errorResponse(String title, String message) {
+    return {
+      'is_food': false,
+      'item': title,
+      'description': message,
+      'calories': 0,
+      'protein': '0g',
+      'carbs': '0g',
+      'fats': '0g',
+      'health_score': 0,
+      'ai_insight': 'Technical issue detected. ${message.contains("API") ? "Update the key in .env" : "Try again later."}',
+      'proven_source': 'System Error',
+      'confidence': 0.0,
+    };
   }
 }

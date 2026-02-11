@@ -51,19 +51,40 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
     _expiryTimer?.cancel();
     _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       final now = DateTime.now();
+      
+      // 1. Filter candidates (swipes) - 60 min expiry
       final validCandidates = state.candidates.where((c) {
-        final createdAt = DateTime.parse(c['created_at']);
-        final expiry = createdAt.add(const Duration(minutes: 60));
-        return expiry.isAfter(now);
+        final createdAtStr = c['created_at']?.toString();
+        if (createdAtStr == null) return true;
+        final createdAt = DateTime.parse(createdAtStr).toUtc();
+        final expiry = createdAt.add(const Duration(minutes: 60)); // Candidates expire in 60m
+        return expiry.isAfter(now.toUtc());
       }).toList();
 
-      if (validCandidates.length != state.candidates.length) {
-        state = state.copyWith(candidates: validCandidates);
-        // PERMANENT REMOVAL: Clean up SQL whenever we detect an expiry in the UI
+      // 2. Filter matches - 12 hour expiry
+      bool matchExpired = false;
+      final validMatches = state.matches.where((m) {
+        final expiry = m.matchedAt.add(const Duration(hours: 12));
+        if (now.toUtc().isAfter(expiry)) {
+          matchExpired = true;
+          return false;
+        }
+        return true;
+      }).toList();
+
+      if (validCandidates.length != state.candidates.length || matchExpired) {
+        state = state.copyWith(
+          candidates: validCandidates,
+          matches: validMatches,
+        );
+        // Clean up expired swipes in DB
         _supabaseService.deleteExpiredSwipes();
-      } else if (validCandidates.isNotEmpty) {
-        // Only trigger a state update to refresh timers in UI if there are candidates to refresh
-        state = state.copyWith(candidates: [...state.candidates]);
+      } else if (validCandidates.isNotEmpty || validMatches.isNotEmpty) {
+        // Trigger generic refresh to update countdowns in UI
+        state = state.copyWith(
+          candidates: [...state.candidates],
+          matches: [...state.matches],
+        );
       }
     });
   }
@@ -96,22 +117,32 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
          'worker_id': m.workerId,
          'client_id': m.clientId,
          'status': m.status,
-         'matched_at': m.matchedAt.toIso8601String(),
+         'created_at': m.matchedAt.toIso8601String(),
        }).toList());
     });
   }
 
   Future<void> _fetchMatches(List<Map<String, dynamic>> data) async {
+    final now = DateTime.now();
     final List<TaskMatch> hydratedMatches = [];
     
-    for (var json in data) {
+    // Filter out matches older than 12 hours (Chat Expiry)
+    final validData = data.where((json) {
+      final createdAtStr = json['created_at'] ?? json['createdAt'] ?? json['matched_at'] ?? json['matchedAt'];
+      if (createdAtStr == null) return false; // Default to EXPIRED if no date found
+      final createdAt = DateTime.parse(createdAtStr.toString()).toUtc();
+      return now.toUtc().difference(createdAt).inHours < 12;
+    }).toList();
+
+    for (var json in validData) {
       final matchId = json['id'].toString();
       
-      final matchedAt = json['created_at'] != null 
-          ? DateTime.parse(json['created_at'].toString()) 
-          : DateTime.now();
+      // Ensure the 'created_at' key exists for TaskMatch.fromJson to find it
+      if (json['created_at'] == null && json['matched_at'] != null) {
+        json['created_at'] = json['matched_at'];
+      }
       
-      // Removed proactive 24h filter here - let ChatScreen handle the "Expired" UI
+      // Removed proactive 12h filter here - let ChatScreen handle the "Expired" UI
       // to avoid infinite loading spinners on older matches.
 
       try {
@@ -132,7 +163,7 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
               
           final profile = await _supabaseService.client
               .from('profiles')
-              .select('name, avatar_url')
+              .select('name, avatar_url, verified, selfie_url, id_card_url, selfie_with_id_url, verification_status')
               .eq('id', otherUserId)
               .maybeSingle();
               
@@ -140,8 +171,17 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
             hydratedMatches.add(match.copyWith(
               workerName: match.workerId == otherUserId ? profile['name'] : match.workerName,
               workerAvatar: match.workerId == otherUserId ? profile['avatar_url'] : match.workerAvatar,
+              workerVerificationStatus: match.workerId == otherUserId ? (profile['verified'] == true ? 'verified' : profile['verification_status']) : match.workerVerificationStatus,
+              workerSelfieUrl: match.workerId == otherUserId ? profile['selfie_url'] : match.workerSelfieUrl,
+              workerIdCardUrl: match.workerId == otherUserId ? profile['id_card_url'] : match.workerIdCardUrl,
+              workerSelfieWithIdUrl: match.workerId == otherUserId ? profile['selfie_with_id_url'] : match.workerSelfieWithIdUrl,
+
               clientName: match.clientId == otherUserId ? profile['name'] : match.clientName,
               clientAvatar: match.clientId == otherUserId ? profile['avatar_url'] : match.clientAvatar,
+              clientVerificationStatus: match.clientId == otherUserId ? (profile['verified'] == true ? 'verified' : profile['verification_status']) : match.clientVerificationStatus,
+              clientSelfieUrl: match.clientId == otherUserId ? profile['selfie_url'] : match.clientSelfieUrl,
+              clientIdCardUrl: match.clientId == otherUserId ? profile['id_card_url'] : match.clientIdCardUrl,
+              clientSelfieWithIdUrl: match.clientId == otherUserId ? profile['selfie_with_id_url'] : match.clientSelfieWithIdUrl,
             ));
           } else {
             hydratedMatches.add(match);
@@ -166,12 +206,13 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
       
     final myTaskIds = (myTasksResponse as List).map((t) => t['id'] as String).toSet();
     
-    // Get existing match worker IDs to filter them out of candidates
-    final existingMatchedWorkerIds = state.matches.map((m) => m.workerId).toSet();
+    // ✨ FIX: Use composite key {taskId}_{workerId} to filter out SPECIFIC matches
+    // instead of blocking a worker globally across all tasks.
+    final existingMatchKeys = state.matches.map((m) => '${m.taskId}_${m.workerId}').toSet();
 
     final relevantSwipes = swipesData.where((s) => 
       myTaskIds.contains(s['task_id']) && 
-      !existingMatchedWorkerIds.contains(s['user_id']) &&
+      !existingMatchKeys.contains('${s['task_id']}_${s['user_id']}') &&
       s['direction'] == 'right'
     ).toList();
     
@@ -179,9 +220,9 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
     final now = DateTime.now();
     
     for (var swipe in relevantSwipes) {
-      // PROACTIVELY FILTER OUT EXPIRED SWIPES (60 mins)
-      final createdAt = DateTime.parse(swipe['created_at']);
-      if (now.difference(createdAt).inMinutes >= 60) continue;
+      // PROACTIVELY FILTER OUT EXPIRED SWIPES (60 mins) - Use UTC for safety
+      final createdAt = DateTime.parse(swipe['created_at']).toUtc();
+      if (now.toUtc().difference(createdAt).inMinutes >= 60) continue;
 
       final profile = await _supabaseService.client
         .from('profiles')
@@ -202,6 +243,7 @@ class MatchesNotifier extends StateNotifier<MatchesState> {
           'worker_avatar': profile['avatar_url'],
           'worker_rating': profile['rating'],
           'created_at': swipe['created_at'],
+          'verification_photo_url': swipe['verification_photo_url'],
         });
       }
     }
@@ -448,7 +490,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           .eq('id', matchId)
           .maybeSingle();
       if (matchRes != null) {
-        matchCreatedAt = DateTime.parse(matchRes['created_at']);
+        matchCreatedAt = DateTime.parse(matchRes['created_at']).toUtc();
       }
     } catch (e) {
       print('Error fetching match creation time: $e');
@@ -463,8 +505,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // But the requirement says "removed after 24 hours ... from the time after match".
       // This means if matchCreatedAt is more than 24h ago, hide EVERYTHING.
       if (matchCreatedAt != null) {
-        final now = DateTime.now();
-        final expiryTime = matchCreatedAt.add(const Duration(hours: 24));
+        final now = DateTime.now().toUtc();
+        final expiryTime = matchCreatedAt.add(const Duration(hours: 12));
         if (now.isAfter(expiryTime)) {
           messages = []; // Chat has expired, clear messages
         }

@@ -62,10 +62,10 @@ class ProfileScreen extends ConsumerWidget {
                         child: CircleAvatar(
                           radius: 54,
                           backgroundColor: isDark ? AppTheme.luxeDarkGrey : const Color(0xFFF2F2F7),
-                          backgroundImage: currentUser.avatarUrl != null
-                              ? CachedNetworkImageProvider(currentUser.avatarUrl!)
+                          backgroundImage: (currentUser.selfieUrl ?? currentUser.avatarUrl) != null
+                              ? CachedNetworkImageProvider(currentUser.selfieUrl ?? currentUser.avatarUrl!)
                               : null,
-                          child: currentUser.avatarUrl == null
+                          child: (currentUser.selfieUrl ?? currentUser.avatarUrl) == null
                               ? Text(
                                   currentUser.name.substring(0, 1).toUpperCase(),
                                   style: TextStyle(
@@ -294,6 +294,87 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
+
+                  const SizedBox(height: 32),
+                  Text(
+                    'KYC VERIFICATION DOCUMENTS',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                      fontSize: 12,
+                      color: primaryColor.withOpacity(0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('Selfie', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: currentUser.selfieUrl != null 
+                                        ? CachedNetworkImage(
+                                            imageUrl: currentUser.selfieUrl!, 
+                                            height: 100, 
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                          )
+                                        : Container(height: 100, width: double.infinity, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05), child: const Icon(Icons.person)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('ID Card', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: currentUser.idCardUrl != null 
+                                        ? CachedNetworkImage(
+                                            imageUrl: currentUser.idCardUrl!, 
+                                            height: 100, 
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                          )
+                                        : Container(height: 100, width: double.infinity, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05), child: const Icon(Icons.badge)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Handheld ID Verification', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: currentUser.selfieWithIdUrl != null 
+                              ? CachedNetworkImage(
+                                  imageUrl: currentUser.selfieWithIdUrl!, 
+                                  height: 150, 
+                                  width: double.infinity, 
+                                  fit: BoxFit.cover, 
+                                  placeholder: (context, url) => const Center(child: CircularProgressIndicator())
+                                )
+                              : Container(height: 150, width: double.infinity, color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05), child: const Icon(Icons.add_a_photo_outlined)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: 32),
 

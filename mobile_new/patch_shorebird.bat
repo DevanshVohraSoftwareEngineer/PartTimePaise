@@ -1,0 +1,6 @@
+@echo off
+echo Setting git config...
+git config --global core.longpaths true
+echo Running Shorebird Patch...
+echo Y | shorebird patch android --release-version 1.1.0+3 --verbose
+echo Done.

@@ -141,7 +141,7 @@ BEGIN
       'Interested for this gig!',
       'pending',
       (SELECT name FROM profiles WHERE id = NEW.user_id),
-      (SELECT selfie_url FROM profiles WHERE id = NEW.user_id),
+      (SELECT COALESCE(selfie_url, avatar_url) FROM profiles WHERE id = NEW.user_id),
       (SELECT id_card_url FROM profiles WHERE id = NEW.user_id)
     ON CONFLICT (task_id, worker_id) DO UPDATE SET
       worker_name = EXCLUDED.worker_name,
@@ -158,7 +158,25 @@ CREATE TRIGGER on_swipe_right
 AFTER INSERT OR UPDATE ON swipes
 FOR EACH ROW EXECUTE FUNCTION sync_swipe_to_bid();
 
--- 5. Secure Match RPC (Used for Instant Match & Manual Accept)
+-- 5. Chat Message Sender Info Sync
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sender_name TEXT;
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sender_avatar TEXT;
+
+CREATE OR REPLACE FUNCTION sync_chat_sender_info()
+RETURNS TRIGGER AS $$
+BEGIN
+  SELECT name, avatar_url INTO NEW.sender_name, NEW.sender_avatar
+  FROM profiles WHERE id = NEW.sender_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_message_insert ON chat_messages;
+CREATE TRIGGER on_message_insert
+BEFORE INSERT ON chat_messages
+FOR EACH ROW EXECUTE FUNCTION sync_chat_sender_info();
+
+-- 6. Secure Match RPC (Used for Instant Match & Manual Accept)
 CREATE OR REPLACE FUNCTION create_match_secure(p_task_id UUID, p_worker_id UUID)
 RETURNS UUID AS $$
 DECLARE
@@ -183,6 +201,34 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute to authenticated
 GRANT EXECUTE ON FUNCTION create_match_secure(UUID, UUID) TO authenticated;
+
+-- 6. ENRICHED MATCHES VIEW (For Chat & KYC Transparency)
+DROP VIEW IF EXISTS enriched_matches CASCADE;
+CREATE OR REPLACE VIEW enriched_matches AS
+SELECT 
+    m.*,
+    w.name as worker_name,
+    w.avatar_url as worker_avatar,
+    w.selfie_url as worker_selfie_url,
+    w.id_card_url as worker_id_card_url,
+    w.selfie_with_id_url as worker_selfie_with_id_url,
+    w.verification_status as worker_verification_status,
+    c.name as client_name,
+    c.avatar_url as client_avatar,
+    c.selfie_url as client_selfie_url,
+    c.id_card_url as client_id_card_url,
+    c.selfie_with_id_url as client_selfie_with_id_url,
+    c.verification_status as client_verification_status,
+    t.title as task_title,
+    t.budget as task_budget,
+    t.status as task_status,
+    t.location as task_location
+FROM matches m
+LEFT JOIN profiles w ON m.worker_id = w.id
+LEFT JOIN profiles c ON m.client_id = c.id
+LEFT JOIN tasks t ON m.task_id = t.id;
+
+GRANT SELECT ON enriched_matches TO authenticated;
 
 -- ========================================================
 -- FINISHED: RUN THIS IN SUPABASE SQL EDITOR

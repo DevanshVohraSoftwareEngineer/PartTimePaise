@@ -7,15 +7,18 @@ import '../utils/distance_calculator.dart';
 import '../widgets/glass_card.dart';
 import '../services/supabase_service.dart';
 import '../widgets/countdown_timer.dart';
+import 'package:geolocator/geolocator.dart';
 
 class TaskItemBar extends ConsumerStatefulWidget {
   final Task task;
+  final Position? currentPosition;
   final VoidCallback onLike;
   final VoidCallback onNope;
 
   const TaskItemBar({
     super.key,
     required this.task,
+    this.currentPosition,
     required this.onLike,
     required this.onNope,
   });
@@ -38,9 +41,18 @@ class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    final distance = widget.task.distanceMeters != null 
-        ? DistanceCalculator.formatDistance(widget.task.distanceMeters!) 
-        : 'Unknown dist';
+    String distance = 'Unknown dist';
+    if (widget.currentPosition != null && widget.task.pickupLat != null && widget.task.pickupLng != null) {
+      final double distMeters = DistanceCalculator.calculateDistance(
+        widget.currentPosition!.latitude,
+        widget.currentPosition!.longitude,
+        widget.task.pickupLat!,
+        widget.task.pickupLng!,
+      );
+      distance = DistanceCalculator.formatDistance(distMeters);
+    } else if (widget.task.distanceMeters != null) {
+      distance = DistanceCalculator.formatDistance(widget.task.distanceMeters!);
+    }
 
     return AnimatedSize(
       duration: const Duration(milliseconds: 300),
@@ -61,6 +73,26 @@ class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProv
                     children: [
                       // Action - Nope
                       _buildCircleButton(Icons.close, Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black54, widget.onNope),
+                      const SizedBox(width: 8),
+
+                      // Mandatory Selfie
+                      if (widget.task.clientFaceUrl != null)
+                        GestureDetector(
+                          onTap: () => _isExpanded ? null : setState(() => _isExpanded = true),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTheme.electricMedium, width: 2),
+                              image: DecorationImage(
+                                image: CachedNetworkImageProvider(widget.task.clientFaceUrl!),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                      
                       const SizedBox(width: 12),
                       
                       // Title and Info
@@ -95,12 +127,18 @@ class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProv
                                   shape: BoxShape.circle
                                 )),
                                 const SizedBox(width: 8),
-                                Text(distance.toUpperCase(), style: TextStyle(
-                                  fontSize: 10, 
-                                  fontWeight: FontWeight.w800, 
-                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38, 
-                                  letterSpacing: 0.8
-                                )),
+                                Row(
+                                  children: [
+                                    _buildRadarDot(),
+                                    const SizedBox(width: 4),
+                                    Text(distance.toUpperCase(), style: TextStyle(
+                                      fontSize: 10, 
+                                      fontWeight: FontWeight.w800, 
+                                      color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38, 
+                                      letterSpacing: 0.8
+                                    )),
+                                  ],
+                                ),
                               ],
                             ),
                           ],
@@ -209,17 +247,8 @@ class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProv
           
           const SizedBox(height: 24),
           
-          // KYC Proofs Row
-          Text('IDENTITY PROOFS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor.withOpacity(0.3), letterSpacing: 1.5)),
-          const SizedBox(height: 12),
-          
-          Row(
-            children: [
-              _buildMiniProof('Face Photo', widget.task.clientFaceUrl, Icons.face),
-              const SizedBox(width: 16),
-              _buildMiniProof('College ID', widget.task.clientIdCardUrl, Icons.badge),
-            ],
-          ),
+          // 🛡️ KYC Privacy: IDs are only shown after matching in the chat.
+          // The public feed only shows the mandatory selfie in the circle avatar.
         ],
       ),
     );
@@ -246,6 +275,24 @@ class _TaskItemBarState extends ConsumerState<TaskItemBar> with SingleTickerProv
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
+    );
+  }
+
+  Widget _buildRadarDot() {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: const BoxDecoration(
+        color: AppTheme.electricMedium,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.electricMedium,
+            blurRadius: 2,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
     );
   }
 

@@ -161,6 +161,14 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 32),
+          // Version Info
+          Center(
+            child: Text(
+              'v1.1.0+5 (Patch 1)',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );

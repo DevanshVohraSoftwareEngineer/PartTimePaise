@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
+import 'dart:io';
 import '../data_types/task.dart';
 import '../services/supabase_service.dart';
 import 'auth_provider.dart';
@@ -137,7 +138,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     super.dispose();
   }
 
-  Future<void> createTask(Map<String, dynamic> data) async {
+  Future<void> createTask(Map<String, dynamic> data, {File? verificationImage}) async {
     final userId = _supabaseService.currentUser?.id;
     if (userId == null) return;
 
@@ -155,7 +156,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     state = state.copyWith(tasks: [tempTask, ...state.tasks]);
 
     try {
-      await _supabaseService.createTask(data);
+      await _supabaseService.createTask(data, verificationImage: verificationImage);
       // Real-time stream will replace tempTask with the actual one from DB
     } catch (e) {
       // Rollback

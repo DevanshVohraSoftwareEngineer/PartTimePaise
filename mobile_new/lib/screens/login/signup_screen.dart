@@ -102,14 +102,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final authState = ref.watch(authProvider);
     final isLoading = authState.isLoading;
 
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      // backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
           onPressed: () => context.pop(),
         ),
-        backgroundColor: Colors.white,
+        // backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
       ),
       body: Stack(
@@ -123,13 +125,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 20),
-                    const Text(
+                    Text(
                       'Create Account',
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -1,
-                        color: Colors.black,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -137,7 +139,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       'Join the campus marketplace',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.black.withOpacity(0.5),
+                        color: isDark ? Colors.white.withOpacity(0.5) : Colors.black.withOpacity(0.5),
                       ),
                     ),
                     const SizedBox(height: 48),
@@ -171,7 +173,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       decoration: InputDecoration(
                         hintText: 'Password',
                         filled: true,
-                        fillColor: Colors.grey[100],
+                        fillColor: isDark ? Colors.white10 : Colors.grey[100],
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -192,14 +194,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ElevatedButton(
                       onPressed: isLoading ? null : _handleSignup,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
+                        backgroundColor: isDark ? Colors.white : Colors.black,
+                        foregroundColor: isDark ? Colors.black : Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
                       child: isLoading 
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: isDark ? Colors.black : Colors.white, strokeWidth: 2))
                         : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     ),
                     const SizedBox(height: 24),
@@ -207,10 +209,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Already have an account? ', style: TextStyle(color: Colors.black54)),
+                        Text('Already have an account? ', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54)),
                         TextButton(
                           onPressed: () => context.pop(),
-                          child: const Text('Login', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          child: Text('Login', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -234,6 +236,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   Widget _buildRoleButton(String label, String role) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     bool isSelected = _selectedRole == role;
     return Expanded(
       child: GestureDetector(
@@ -241,14 +244,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.grey[100],
+            color: isSelected 
+                ? (isDark ? Colors.white : Colors.black) 
+                : (isDark ? Colors.white10 : Colors.grey[100]),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
             child: Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black,
+                color: isSelected 
+                    ? (isDark ? Colors.black : Colors.white) 
+                    : (isDark ? Colors.white : Colors.black),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -265,7 +272,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

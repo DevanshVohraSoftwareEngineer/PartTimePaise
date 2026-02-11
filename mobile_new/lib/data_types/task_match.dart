@@ -21,9 +21,11 @@ class TaskMatch extends Equatable {
   final double? clientLng;
   final String? clientIdCardUrl;
   final String? clientSelfieUrl;
+  final String? clientSelfieWithIdUrl;
   final String? clientVerificationStatus;
   final String? workerIdCardUrl;
   final String? workerSelfieUrl;
+  final String? workerSelfieWithIdUrl;
   final String? workerVerificationStatus;
   
   // Last message info
@@ -45,6 +47,7 @@ class TaskMatch extends Equatable {
     this.workerLng,
     this.workerIdCardUrl,
     this.workerSelfieUrl,
+    this.workerSelfieWithIdUrl,
     this.workerVerificationStatus,
     this.clientName,
     this.clientAvatar,
@@ -52,6 +55,7 @@ class TaskMatch extends Equatable {
     this.clientLng,
     this.clientIdCardUrl,
     this.clientSelfieUrl,
+    this.clientSelfieWithIdUrl,
     this.clientVerificationStatus,
     this.lastMessage,
     this.lastMessageAt,
@@ -88,7 +92,7 @@ class TaskMatch extends Equatable {
       workerId: json['worker_id']?.toString() ?? json['workerId']?.toString() ?? '',
       clientId: json['client_id']?.toString() ?? json['clientId']?.toString() ?? '',
       status: json['status']?.toString() ?? 'active',
-      matchedAt: _parseDateTime(json['matched_at'] ?? json['matchedAt']),
+      matchedAt: _parseDateTime(json['created_at'] ?? json['matched_at'] ?? json['matchedAt']),
       task: task,
       workerName: json['worker_name']?.toString() ?? json['workerName']?.toString(),
       workerAvatar: json['worker_avatar']?.toString() ?? json['workerAvatar']?.toString(),
@@ -100,9 +104,11 @@ class TaskMatch extends Equatable {
       clientLng: (json['client_lng'] ?? json['clientLng'])?.toDouble(),
       clientIdCardUrl: json['client_id_card_url']?.toString(),
       clientSelfieUrl: json['client_selfie_url']?.toString(),
+      clientSelfieWithIdUrl: json['client_selfie_with_id_url']?.toString(),
       clientVerificationStatus: json['client_verification_status']?.toString(),
       workerIdCardUrl: json['worker_id_card_url']?.toString(),
       workerSelfieUrl: json['worker_selfie_url']?.toString(),
+      workerSelfieWithIdUrl: json['worker_selfie_with_id_url']?.toString(),
       workerVerificationStatus: json['worker_verification_status']?.toString(),
       lastMessage: json['last_message']?.toString() ?? json['lastMessage']?.toString(),
       lastMessageAt: (json['last_message_at'] ?? json['lastMessageAt']) != null 
@@ -114,11 +120,19 @@ class TaskMatch extends Equatable {
 
   static DateTime _parseDateTime(dynamic date) {
     if (date is String) {
-      return DateTime.parse(date).toLocal();
+      // Ensure we parse as UTC if it's from Supabase, then convert if needed.
+      // Supabase timestamps are usually UTC.
+      try {
+        return DateTime.parse(date).toUtc();
+      } catch (e) {
+        return DateTime(2000).toUtc(); // Safe fallback: 24 years ago
+      }
     } else if (date is DateTime) {
-      return date.toLocal();
+      return date.toUtc();
     } else {
-      return DateTime.now();
+      // 🚨 CRITICAL FIX: Do NOT use DateTime.now() as fallback.
+      // If we don't have a date, assume it's an old/invalid record that should be expired.
+      return DateTime(2000).toUtc(); 
     }
   }
 
@@ -137,6 +151,7 @@ class TaskMatch extends Equatable {
       'worker_lng': workerLng,
       'worker_id_card_url': workerIdCardUrl,
       'worker_selfie_url': workerSelfieUrl,
+      'worker_selfie_with_id_url': workerSelfieWithIdUrl,
       'worker_verification_status': workerVerificationStatus,
       'client_name': clientName,
       'client_avatar': clientAvatar,
@@ -144,6 +159,7 @@ class TaskMatch extends Equatable {
       'client_lng': clientLng,
       'client_id_card_url': clientIdCardUrl,
       'client_selfie_url': clientSelfieUrl,
+      'client_selfie_with_id_url': clientSelfieWithIdUrl,
       'client_verification_status': clientVerificationStatus,
       'last_message': lastMessage,
       'last_message_at': lastMessageAt?.toIso8601String(),
@@ -165,6 +181,7 @@ class TaskMatch extends Equatable {
     double? workerLng,
     String? workerIdCardUrl,
     String? workerSelfieUrl,
+    String? workerSelfieWithIdUrl,
     String? workerVerificationStatus,
     String? clientName,
     String? clientAvatar,
@@ -172,6 +189,7 @@ class TaskMatch extends Equatable {
     double? clientLng,
     String? clientIdCardUrl,
     String? clientSelfieUrl,
+    String? clientSelfieWithIdUrl,
     String? clientVerificationStatus,
     String? lastMessage,
     DateTime? lastMessageAt,
@@ -191,6 +209,7 @@ class TaskMatch extends Equatable {
       workerLng: workerLng ?? this.workerLng,
       workerIdCardUrl: workerIdCardUrl ?? this.workerIdCardUrl,
       workerSelfieUrl: workerSelfieUrl ?? this.workerSelfieUrl,
+      workerSelfieWithIdUrl: workerSelfieWithIdUrl ?? this.workerSelfieWithIdUrl,
       workerVerificationStatus: workerVerificationStatus ?? this.workerVerificationStatus,
       clientName: clientName ?? this.clientName,
       clientAvatar: clientAvatar ?? this.clientAvatar,
@@ -198,6 +217,7 @@ class TaskMatch extends Equatable {
       clientLng: clientLng ?? this.clientLng,
       clientIdCardUrl: clientIdCardUrl ?? this.clientIdCardUrl,
       clientSelfieUrl: clientSelfieUrl ?? this.clientSelfieUrl,
+      clientSelfieWithIdUrl: clientSelfieWithIdUrl ?? this.clientSelfieWithIdUrl,
       clientVerificationStatus: clientVerificationStatus ?? this.clientVerificationStatus,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -220,6 +240,7 @@ class TaskMatch extends Equatable {
         workerLng,
         workerIdCardUrl,
         workerSelfieUrl,
+        workerSelfieWithIdUrl,
         workerVerificationStatus,
         clientName,
         clientAvatar,
@@ -227,6 +248,7 @@ class TaskMatch extends Equatable {
         clientLng,
         clientIdCardUrl,
         clientSelfieUrl,
+        clientSelfieWithIdUrl,
         clientVerificationStatus,
         lastMessage,
         lastMessageAt,

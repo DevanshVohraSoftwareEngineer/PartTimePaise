@@ -7,6 +7,7 @@ import '../../managers/matches_provider.dart';
 import '../../managers/auth_provider.dart';
 import '../../data_types/task_match.dart';
 import '../../config/theme.dart';
+import '../../widgets/countdown_timer.dart';
 
 class MatchesListScreen extends ConsumerStatefulWidget {
   const MatchesListScreen({super.key});
@@ -140,13 +141,14 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
     final String? workerAvatar = candidate['worker_avatar'];
     final double budget = (candidate['task_budget'] ?? 0).toDouble();
     final String taskTitle = candidate['task_title'] ?? 'Task';
+    final String? verificationPhoto = candidate['verification_photo_url'];
     
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Calculate remaining time
-    final createdAt = DateTime.parse(candidate['created_at']);
+    // Calculate remaining time using UTC for consistency
+    final createdAt = DateTime.parse(candidate['created_at']).toUtc();
     final expiry = createdAt.add(const Duration(minutes: 60));
-    final remaining = expiry.difference(DateTime.now());
+    final remaining = expiry.difference(DateTime.now().toUtc());
     
     // SAFETY: If already expired, don't show anyway
     if (remaining.isNegative) {
@@ -194,6 +196,25 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
                   ),
               ],
             ),
+            const SizedBox(width: 8),
+            // Verification Photo (Live Authenticity)
+            if (verificationPhoto != null)
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green, width: 1.5),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: CachedNetworkImage(
+                    imageUrl: verificationPhoto,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const Icon(Icons.camera_alt, size: 20),
+                  ),
+                ),
+              ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -319,9 +340,9 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
   }
 
   Widget _buildConversationItem(TaskMatch match, dynamic currentUser) {
-    final bool isClient = currentUser?.role == 'client';
-    final otherUserName = isClient ? match.workerName : match.clientName;
-    final otherUserAvatar = isClient ? match.workerAvatar : match.clientAvatar;
+    final bool isMeWorker = currentUser?.id == match.workerId;
+    final otherUserName = isMeWorker ? match.clientName : match.workerName;
+    final otherUserAvatar = isMeWorker ? match.clientAvatar : match.workerAvatar;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
@@ -345,9 +366,22 @@ class _MatchesListScreenState extends ConsumerState<MatchesListScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        otherUserName ?? 'User',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Text(
+                              otherUserName ?? 'User',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 8),
+                            CountdownTimer(
+                              expiresAt: match.matchedAt.add(const Duration(hours: 12)),
+                              textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                       ),
                       Text(
                         _formatTime(match.lastMessageAt),

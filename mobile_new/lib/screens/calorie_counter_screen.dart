@@ -323,21 +323,26 @@ class _CalorieCounterScreenState extends ConsumerState<CalorieCounterScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(color: AppTheme.cyanAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  "EST. WEIGHT: ${_analysisResults!['portion_estimate'] ?? '-'}",
+                  style: TextStyle(color: AppTheme.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold, shadows: shadows),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
             _analysisResults!['description'] ?? 'No description available',
             textAlign: TextAlign.center,
             style: TextStyle(color: secondaryTextColor, fontSize: 13, shadows: shadows),
           ),
           if (isFood) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(color: AppTheme.cyanAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-              child: Text(
-                "Est. Weight: ${_analysisResults!['portion_estimate'] ?? '-'}",
-                style: TextStyle(color: AppTheme.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold, shadows: shadows),
-              ),
-            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -520,16 +525,33 @@ class _CalorieCounterScreenState extends ConsumerState<CalorieCounterScreen> {
                   ),
                   alignment: Alignment.bottomCenter,
                   padding: const EdgeInsets.all(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.black54 : Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      "${record.calories} kcal", 
-                      style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black87 : Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          record.fullResults['portion_estimate'] ?? "N/A", 
+                          style: TextStyle(color: isDark ? AppTheme.cyanAccent : Colors.black, fontSize: 9, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppTheme.cyanAccent : Colors.black,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          "${record.calories} kcal", 
+                          style: TextStyle(color: isDark ? Colors.black : Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

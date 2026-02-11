@@ -25,7 +25,9 @@ class User extends Equatable {
   final double? currentLng;
   final String? idCardUrl;
   final String? selfieUrl;
+  final String? selfieWithIdUrl;
   final String? verificationStatus;
+  final double? distanceMeters;
 
   const User({
     required this.id,
@@ -51,7 +53,9 @@ class User extends Equatable {
     this.currentLng,
     this.idCardUrl,
     this.selfieUrl,
+    this.selfieWithIdUrl,
     this.verificationStatus,
+    this.distanceMeters,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -127,6 +131,7 @@ class User extends Equatable {
         currentLng: currentLng,
         idCardUrl: json['id_card_url']?.toString() ?? json['idCardUrl']?.toString(),
         selfieUrl: json['selfie_url']?.toString() ?? json['selfieUrl']?.toString(),
+        selfieWithIdUrl: json['selfie_with_id_url']?.toString() ?? json['selfieWithIdUrl']?.toString(),
         verificationStatus: json['verification_status']?.toString() ?? json['verificationStatus']?.toString(),
       );
     } catch (e) {
@@ -194,6 +199,7 @@ class User extends Equatable {
       'current_lng': currentLng,
       'id_card_url': idCardUrl,
       'selfie_url': selfieUrl,
+      'selfie_with_id_url': selfieWithIdUrl,
       'verification_status': verificationStatus,
     };
   }
@@ -220,6 +226,11 @@ class User extends Equatable {
     DateTime? lastSeen,
     double? currentLat,
     double? currentLng,
+    double? distanceMeters,
+    String? selfieWithIdUrl,
+    String? idCardUrl,
+    String? selfieUrl,
+    String? verificationStatus,
   }) {
     return User(
       id: id ?? this.id,
@@ -243,9 +254,11 @@ class User extends Equatable {
       lastSeen: lastSeen ?? this.lastSeen,
       currentLat: currentLat ?? this.currentLat,
       currentLng: currentLng ?? this.currentLng,
-      idCardUrl: idCardUrl ?? idCardUrl,
-      selfieUrl: selfieUrl ?? selfieUrl,
-      verificationStatus: verificationStatus ?? verificationStatus,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+      idCardUrl: idCardUrl ?? this.idCardUrl,
+      selfieUrl: selfieUrl ?? this.selfieUrl,
+      selfieWithIdUrl: selfieWithIdUrl ?? this.selfieWithIdUrl,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
 
@@ -274,6 +287,7 @@ class User extends Equatable {
         currentLng,
         idCardUrl,
         selfieUrl,
+        selfieWithIdUrl,
         verificationStatus,
       ];
 }

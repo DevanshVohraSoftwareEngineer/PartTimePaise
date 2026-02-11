@@ -56,6 +56,7 @@ class Task extends Equatable {
   
   // Expiration for time-sensitive tasks
   final DateTime? expiresAt;
+  final bool requireSelfie;
 
   DateTime get effectiveExpiresAt {
     if (expiresAt != null) return expiresAt!;
@@ -111,6 +112,7 @@ class Task extends Equatable {
     this.startOtp,
     this.endOtp,
     this.expiresAt,
+    this.requireSelfie = false,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -158,6 +160,7 @@ class Task extends Equatable {
       startOtp: json['start_otp']?.toString(),
       endOtp: json['end_otp']?.toString(),
       expiresAt: json['expires_at'] != null ? _parseDateTime(json['expires_at']) : null,
+      requireSelfie: json['require_selfie'] == true,
     );
   }
 
@@ -224,6 +227,7 @@ class Task extends Equatable {
       'start_otp': startOtp,
       'end_otp': endOtp,
       'expires_at': expiresAt?.toIso8601String(),
+      'require_selfie': requireSelfie,
     };
   }
 
@@ -302,6 +306,7 @@ class Task extends Equatable {
       startOtp: startOtp ?? this.startOtp,
       endOtp: endOtp ?? this.endOtp,
       expiresAt: expiresAt ?? this.expiresAt,
+      requireSelfie: requireSelfie ?? this.requireSelfie,
     );
   }
 
@@ -343,7 +348,8 @@ class Task extends Equatable {
         estimatedTimeMinutes = null,
         startOtp = null,
         endOtp = null,
-        expiresAt = null;
+        expiresAt = null,
+        requireSelfie = false;
 
   @override
   List<Object?> get props => [
@@ -385,5 +391,6 @@ class Task extends Equatable {
         startOtp,
         endOtp,
         expiresAt,
+        requireSelfie,
       ];
 }

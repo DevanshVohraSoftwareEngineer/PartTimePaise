@@ -50,12 +50,12 @@ class ScaffoldWithNavBar extends StatelessWidget {
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             destinations: [
               _buildNavItem(Icons.explore_outlined, Icons.explore, 'Explore', isDark),
-              _buildCustomHubItem(isDark),
-              _buildNavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat', isDark),
+              _buildCustomHubItem(isDark), // Categories
+              // Chat moved to Feed UI
               _buildNavItem(Icons.add_circle_outline, Icons.add_circle, 'Post', isDark),
               _buildNavItem(Icons.assignment_outlined, Icons.assignment, 'Posted', isDark),
               _buildNavItem(Icons.work_outline, Icons.work, 'Applied', isDark),
-              _buildNavItem(Icons.person_outline, Icons.person, 'Profile', isDark),
+              // Profile moved to Feed UI
             ],
           ),
         ),
@@ -74,7 +74,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
   NavigationDestination _buildCustomHubItem(bool isDark) {
     // Unused: final bool isSelected = navigationShell.currentIndex == 1;
     return NavigationDestination(
-      label: 'Hub',
+      label: 'Discover',
       icon: Container(
         width: 32,
         height: 32,

@@ -39,7 +39,7 @@ class CategoriesScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Hub",
+                      "Discover",
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: textColor,
                         fontWeight: FontWeight.w800,
@@ -75,18 +75,6 @@ class CategoriesScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 _buildViralCard(
                   context,
-                  title: 'Campus Dating',
-                  subtitle: 'Discover meaningful connections',
-                  icon: Icons.favorite_rounded,
-                  gradient: [const Color(0xFFF43F5E), const Color(0xFFE11D48)], // Rose Gradient
-                  isDark: isDark,
-                  onTap: () {
-                    _showComingSoon(context, 'Quick Dating');
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildViralCard(
-                  context,
                   title: 'Elite Events',
                   subtitle: 'Premium campus access & networking',
                   icon: Icons.auto_awesome_rounded,
@@ -96,6 +84,20 @@ class CategoriesScreen extends StatelessWidget {
                     _showComingSoon(context, 'Campus Events');
                   },
                 ),
+                /*
+                const SizedBox(height: 16),
+                _buildViralCard(
+                  context,
+                  title: 'Campus Dating',
+                  subtitle: 'Discover meaningful connections',
+                  icon: Icons.favorite_rounded,
+                  gradient: [const Color(0xFFF43F5E), const Color(0xFFE11D48)], // Rose Gradient
+                  isDark: isDark,
+                  onTap: () {
+                    _showComingSoon(context, 'Quick Dating');
+                  },
+                ),
+                */
                 const SizedBox(height: 100), // Bottom padding for navbar
               ],
             ),

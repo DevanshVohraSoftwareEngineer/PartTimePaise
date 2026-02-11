@@ -29,8 +29,9 @@
 -keep class io.flutter.plugin.** { *; }
 -keep class io.flutter.util.** { *; }
 
-# Obfuscation (Rename classes/methods for smaller size)
-# Temporarily disabling aggressive repackaging due to R8 errors
-# -repackageclasses ''
+# Aggressive Optimization
+-repackageclasses ''
 -allowaccessmodification
 -printmapping mapping.txt
+-optimizationpasses 5
+-overloadaggressively
